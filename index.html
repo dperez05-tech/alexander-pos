@@ -62,8 +62,17 @@
     .prod-img-wrap { position: relative; background: #F6E9D7; height: 158px; display: flex; align-items: center; justify-content: center; }
     .prod-img-wrap img { width: 100%; height: 100%; object-fit: cover; }
     .prod-stock {
-      position: absolute; top: 8px; right: 8px; background: rgba(255,255,255,.92);
-      padding: 3px 7px; border-radius: 99px; font-size: 11px; font-weight: 700; color: var(--text);
+      position: absolute; top: 8px; right: 8px;
+      padding: 4px 8px; border-radius: 99px; font-size: 11px; font-weight: 800;
+      box-shadow: 0 2px 6px rgba(0,0,0,.12);
+    }
+    .st-ok { background: #E6F4EA; color: #126E47; }
+    .st-warn { background: #FEF3C7; color: #92400E; }
+    .st-bad { background: #FEE4E2; color: #B42318; }
+    .prod-card.is-empty .prod-img-wrap img { opacity: .6; }
+    .stock-banner {
+      border-radius: 10px; padding: 8px 11px; font-size: 13px; font-weight: 700;
+      margin-bottom: 12px; display: flex; align-items: center; gap: 6px;
     }
     .prod-body { padding: 10px 11px; }
     .prod-title { font-size: 13px; font-weight: 700; color: var(--green); line-height: 1.25; }
@@ -303,6 +312,7 @@
       </div>
       <button onclick="closeSaleModal()" style="border:none;background:none;font-size:22px;color:var(--muted);cursor:pointer;">✕</button>
     </div>
+    <div id="mStockBanner" class="stock-banner st-ok"></div>
 
     <div class="row2">
       <div>
@@ -444,16 +454,27 @@ function goTab(id, btn) {
   btn.classList.add('active');
 }
 
+const LOW_STOCK_LIMIT = 5;
+function stockMeta(stock) {
+  const n = Number(stock);
+  if (isNaN(n)) return { cls: 'st-ok', badge: '—', banner: 'Sincronizando stock...' };
+  if (n <= 0) return { cls: 'st-bad', badge: 'Agotado', banner: '🔴 Stock en 0 (carga en 📦 Stock si tienes físicas)' };
+  if (n <= LOW_STOCK_LIMIT) return { cls: 'st-warn', badge: '⚠️ ' + n, banner: `⚠️ Quedan solo ${n} botella${n===1?'':'s'} — reponer pronto` };
+  return { cls: 'st-ok', badge: `${n} disp.`, banner: `✅ ${n} botellas disponibles` };
+}
+
 function renderProductGrid() {
   document.getElementById('productGrid').innerHTML = CATALOG.map(p => {
     const inv = state.inventory.find(i => i.sku === p.sku);
     const price = inv ? inv.precio : p.precio;
-    const stock = inv ? inv.stockActual : '—';
+    const stock = inv ? inv.stockActual : null;
+    const m = stockMeta(stock);
+    const emptyCls = (stock !== null && stock <= 0) ? 'is-empty' : '';
     return `
-      <button type="button" class="prod-card" onclick="openSaleModal('${p.sku}')">
+      <button type="button" class="prod-card ${emptyCls}" onclick="openSaleModal('${p.sku}')">
         <div class="prod-img-wrap">
           <img src="${p.img}" alt="${p.presentacion} ${p.sabor}">
-          <span class="prod-stock">Stock: ${stock}</span>
+          <span class="prod-stock ${m.cls}">${m.badge}</span>
         </div>
         <div class="prod-body">
           <div class="prod-title">${p.presentacion}</div>
@@ -464,13 +485,27 @@ function renderProductGrid() {
   }).join('');
 }
 
+function updateModalBanner() {
+  const inv = state.inventory.find(i => i.presentacion === form.presentacion && i.sabor === form.sabor);
+  const stock = inv ? inv.stockActual : null;
+  const m = stockMeta(stock);
+  const el = document.getElementById('mStockBanner');
+  el.className = 'stock-banner ' + m.cls;
+  if (stock !== null && stock > 0 && form.qty > stock) {
+    el.className = 'stock-banner st-warn';
+    el.textContent = `⚠️ Estás cobrando ${form.qty} pero solo hay ${stock} en stock`;
+  } else {
+    el.textContent = m.banner;
+  }
+}
+
 function openSaleModal(sku) {
   const p = CATALOG.find(x => x.sku === sku);
   const inv = state.inventory.find(i => i.sku === sku);
   form.presentacion = p.presentacion; form.sabor = p.sabor; form.qty = 1; form.salePhoto = ''; form.porConfirmar = false;
   document.getElementById('mImg').src = p.img;
   document.getElementById('mTitle').textContent = p.presentacion;
-  document.getElementById('mSub').textContent = 'Sabor ' + p.sabor + (inv ? ' · Stock: ' + inv.stockActual : '');
+  document.getElementById('mSub').textContent = 'Sabor ' + p.sabor;
   document.getElementById('qtyVal').textContent = '1';
   document.getElementById('priceInput').value = inv ? inv.precio : p.precio;
   document.getElementById('metodoSelect').value = 'Efectivo';
@@ -478,11 +513,11 @@ function openSaleModal(sku) {
   document.getElementById('bancoRefInput').value = '';
   document.getElementById('receiptPreview').style.display = 'none';
   document.getElementById('receiptInput').value = '';
-  toggleTransferUI(); setConf(false); updateTotal();
+  toggleTransferUI(); setConf(false); updateTotal(); updateModalBanner();
   document.getElementById('saleModal').classList.remove('hidden');
 }
 function closeSaleModal() { document.getElementById('saleModal').classList.add('hidden'); }
-function chgQty(d) { form.qty = Math.max(1, form.qty + d); document.getElementById('qtyVal').textContent = form.qty; updateTotal(); }
+function chgQty(d) { form.qty = Math.max(1, form.qty + d); document.getElementById('qtyVal').textContent = form.qty; updateTotal(); updateModalBanner(); }
 function updateTotal() { const p = Number(document.getElementById('priceInput').value) || 0; document.getElementById('sellBtn').textContent = 'COBRAR ' + fmt(form.qty * p); }
 function toggleTransferUI() { document.getElementById('transferBox').classList.toggle('hidden', document.getElementById('metodoSelect').value !== 'Transferencia'); }
 function setConf(porConf) { form.porConfirmar = porConf; document.getElementById('btnConf').classList.toggle('active', !porConf); document.getElementById('btnPorConf').classList.toggle('active', porConf); }
