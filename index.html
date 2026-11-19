@@ -166,7 +166,7 @@
     <img src="./assets/icon-192.png" class="pin-logo" alt="Dulce Navidad">
     <h2 style="font-family:Georgia,serif;color:var(--green);margin:0 0 4px;">Dulce Navidad</h2>
     <p style="margin:0 0 16px;color:var(--muted);font-size:13px;">Alexander · Punto de Venta &amp; Caja</p>
-    <input id="pinInput" type="password" inputmode="numeric" placeholder="Ingresa el PIN" autocomplete="off">
+    <input id="pinInput" type="password" inputmode="numeric" placeholder="Ingresa el PIN" autocomplete="off" onkeydown="if(event.key==='Enter')unlock()">
     <button class="btn-primary" onclick="unlock()">Entrar</button>
   </div>
 </div>
@@ -398,7 +398,8 @@ const CATALOG = [
   { sku: 'ALEX-700-PIST', presentacion: '700 ml',           sabor: 'Pistacho',    precio: 1650, img: './assets/700-pist.jpg' }
 ];
 
-let PIN = localStorage.getItem('alex_pin') || '';
+localStorage.removeItem('alex_pin');
+let PIN = '';
 let state = { inventory: [], sales: [], cashMoves: [], directSales: [], quotes: [], summary: {} };
 let form = { presentacion: 'Licorera 16.9 oz', sabor: 'Tradicional', qty: 1, porConfirmar: false, salePhoto: '', modalPhoto: '', modalTarget: null };
 let quoteLines = [];
@@ -411,7 +412,6 @@ function toast(msg) {
 }
 
 renderProductGrid();
-if (PIN) { document.getElementById('pinScreen').classList.add('hidden'); loadData(); }
 
 function unlock() {
   const v = document.getElementById('pinInput').value.trim();
@@ -426,12 +426,13 @@ async function loadData(fromUnlock) {
     const r = await fetch(API_URL + '?pin=' + encodeURIComponent(PIN));
     const d = await r.json();
     if (!d.ok) {
-      localStorage.removeItem('alex_pin');
+      PIN = '';
+      document.getElementById('pinInput').value = '';
       document.getElementById('pinScreen').classList.remove('hidden');
       toast(d.error || 'PIN incorrecto');
       return;
     }
-    if (fromUnlock) { localStorage.setItem('alex_pin', PIN); document.getElementById('pinScreen').classList.add('hidden'); }
+    if (fromUnlock) { document.getElementById('pinScreen').classList.add('hidden'); }
     state = d;
     renderAll();
     document.getElementById('statusSub').textContent = 'Alexander · Actualizado';
