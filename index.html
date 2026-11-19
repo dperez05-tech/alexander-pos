@@ -347,13 +347,14 @@
       </div>
       <input id="bancoRefInput" type="text" placeholder="Banco / Referencia (ej. Popular 6111...)">
       <label class="photo-box">
-        <input id="receiptInput" type="file" accept="image/*" capture="environment" onchange="handlePhoto(this, 'receiptPreview', 'sale')">
-        <div>📸 <strong>Foto del comprobante</strong><br><small style="color:var(--muted)">Toca para cámara o galería</small></div>
+        <input id="receiptInput" type="file" accept="image/*" onchange="handlePhoto(this, 'receiptPreview', 'sale')">
+        <div>📸 <strong>Foto o captura de WhatsApp</strong><br><small style="color:var(--muted)">Toca para Fototeca o tomar foto</small></div>
         <img id="receiptPreview" class="photo-preview" alt="Vista previa">
       </label>
     </div>
 
     <input id="clienteInput" type="text" placeholder="Cliente (opcional, ej. María Pérez)">
+    <input id="whatsappInput" type="tel" inputmode="tel" placeholder="📱 WhatsApp cliente (opcional, ej. 8095551234)">
     <div class="row2">
       <button class="btn-outline" onclick="closeSaleModal()">Cancelar</button>
       <button id="sellBtn" class="btn-primary" onclick="submitSale()">COBRAR RD$1,500</button>
@@ -368,14 +369,25 @@
     <p id="modalDesc" style="margin:0 0 12px;color:var(--muted);font-size:14px;"></p>
     <input id="modalBancoRef" type="text" placeholder="Banco / Referencia">
     <label class="photo-box">
-      <input id="modalReceiptInput" type="file" accept="image/*" capture="environment" onchange="handlePhoto(this, 'modalPreview', 'modal')">
-      <div>📸 <strong>Adjuntar foto del comprobante</strong></div>
+      <input id="modalReceiptInput" type="file" accept="image/*" onchange="handlePhoto(this, 'modalPreview', 'modal')">
+      <div>📸 <strong>Foto o captura de WhatsApp</strong></div>
       <img id="modalPreview" class="photo-preview" alt="Comprobante">
     </label>
     <div class="row2">
       <button class="btn-outline" onclick="closeModal()">Cancelar</button>
       <button class="btn-primary" onclick="submitConfirmPayment()">Confirmar</button>
     </div>
+  </div>
+</div>
+
+<!-- Modal Enviar Factura por WhatsApp -->
+<div id="waModal" class="modal-bg hidden" onclick="if(event.target===this)closeWaModal()">
+  <div class="modal" style="text-align:center;">
+    <h3 style="margin:0 0 6px;color:var(--green)">✅ Venta registrada</h3>
+    <p id="waSummary" style="margin:0 0 14px;color:var(--muted);font-size:14px;"></p>
+    <a id="waSendLink" href="#" target="_blank" class="btn-primary" style="display:block;text-decoration:none;background:#128C7E;margin-bottom:10px;" onclick="closeWaModal()">📲 Enviar Factura por WhatsApp</a>
+    <a id="pdfViewLink" href="#" target="_blank" class="btn-outline" style="display:block;text-decoration:none;margin-bottom:10px;">📄 Ver Factura PDF</a>
+    <button type="button" class="btn-outline" style="width:100%;" onclick="closeWaModal()">Cerrar</button>
   </div>
 </div>
 
@@ -511,6 +523,7 @@ function openSaleModal(sku) {
   document.getElementById('priceInput').value = inv ? inv.precio : p.precio;
   document.getElementById('metodoSelect').value = 'Efectivo';
   document.getElementById('clienteInput').value = '';
+  document.getElementById('whatsappInput').value = '';
   document.getElementById('bancoRefInput').value = '';
   document.getElementById('receiptPreview').style.display = 'none';
   document.getElementById('receiptInput').value = '';
@@ -544,10 +557,19 @@ function handlePhoto(input, previewId, target) {
   reader.readAsDataURL(file);
 }
 
+function formatWaPhone(raw) {
+  let d = (raw || '').replace(/\D/g, '');
+  if (d.length === 10 && /^(809|829|849)/.test(d)) d = '1' + d;
+  return d;
+}
+function closeWaModal() { document.getElementById('waModal').classList.add('hidden'); }
+
 async function submitSale() {
   const btn = document.getElementById('sellBtn');
   btn.disabled = true; btn.textContent = 'Guardando...';
   const metodo = document.getElementById('metodoSelect').value;
+  const waRaw = document.getElementById('whatsappInput').value.trim();
+  const waNum = formatWaPhone(waRaw);
   try {
     const res = await apiPost({
       action: 'addSale',
@@ -557,9 +579,22 @@ async function submitSale() {
       metodo, porConfirmar: metodo === 'Transferencia' ? form.porConfirmar : false,
       bancoRef: document.getElementById('bancoRefInput').value.trim(),
       cliente: document.getElementById('clienteInput').value.trim(),
+      whatsapp: waRaw,
+      generateInvoice: !!waNum,
       receiptBase64: metodo === 'Transferencia' ? form.salePhoto : '', receiptMime: 'image/jpeg'
     });
-    if (res.ok) { closeSaleModal(); toast('Venta registrada: ' + fmt(res.total)); await loadData(); }
+    if (res.ok) {
+      closeSaleModal();
+      toast('Venta registrada: ' + fmt(res.total));
+      if (waNum && res.invoiceUrl) {
+        const msg = `🎄✨¡Gracias por elegirnos!\n\nNos llena de ilusión saber que nuestro Alexander será parte de tus momentos especiales en esta Navidad.\n\n¡Que cada brindis esté lleno de alegría!\n\nCon cariño,\n\nGloria & Ana ❤️\nDulce Navidad 🎄✨\n\n📄 Tu factura (${res.id}): ${res.invoiceUrl}`;
+        document.getElementById('waSummary').textContent = `Factura ${res.id} por ${fmt(res.total)} lista para ${waRaw}`;
+        document.getElementById('waSendLink').href = `https://wa.me/${waNum}?text=${encodeURIComponent(msg)}`;
+        document.getElementById('pdfViewLink').href = res.invoiceUrl;
+        document.getElementById('waModal').classList.remove('hidden');
+      }
+      await loadData();
+    }
     else toast(res.error || 'Error al guardar');
   } catch (e) { toast('Error de red'); }
   btn.disabled = false; updateTotal();
