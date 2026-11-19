@@ -21,7 +21,6 @@
       --text: #1E2421;
       --muted: #64746B;
       --border: #E4DDD0;
-      --danger: #B42318;
       --warn: #B54708;
       --ok: #126E47;
       --radius: 14px;
@@ -108,15 +107,15 @@
     }
     nav {
       position: fixed; bottom: 0; left: 0; right: 0; background: #fff;
-      border-top: 1px solid var(--border); display: grid; grid-template-columns: repeat(4, 1fr);
+      border-top: 1px solid var(--border); display: grid; grid-template-columns: repeat(5, 1fr);
       padding-bottom: env(safe-area-inset-bottom); z-index: 30;
     }
     nav button {
-      border: none; background: none; padding: 10px 4px; font-size: 12px;
+      border: none; background: none; padding: 9px 2px; font-size: 11px;
       color: var(--muted); font-weight: 600; cursor: pointer;
     }
     nav button.active { color: var(--green); font-weight: 800; }
-    nav button span { display: block; font-size: 20px; margin-bottom: 2px; }
+    nav button span { display: block; font-size: 19px; margin-bottom: 2px; }
     .hidden { display: none !important; }
     .item { border-bottom: 1px solid var(--border); padding: 10px 0; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
     .item:last-child { border-bottom: none; }
@@ -130,11 +129,17 @@
       font-size: 14px; font-weight: 600; z-index: 95; display: none;
     }
     .pin-screen {
-      position: fixed; inset: 0; background: var(--green); color: #FAF6EE;
+      position: fixed; inset: 0;
+      background: linear-gradient(rgba(17, 38, 28, 0.55), rgba(17, 38, 28, 0.72)), url('./assets/bg.jpg') center/cover no-repeat;
+      color: #FAF6EE;
       display: flex; flex-direction: column; align-items: center; justify-content: center;
       padding: 24px; z-index: 100;
     }
-    .pin-card { background: #fff; color: var(--text); border-radius: 20px; padding: 22px; width: 100%; max-width: 320px; text-align: center; }
+    .pin-card {
+      background: rgba(255, 255, 255, 0.94); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+      color: var(--text); border-radius: 22px; padding: 24px 22px; width: 100%; max-width: 325px; text-align: center;
+      box-shadow: 0 12px 32px rgba(0,0,0,.28);
+    }
     .pin-logo { width: 88px; height: 88px; border-radius: 50%; border: 2px solid var(--gold); margin-bottom: 10px; object-fit: cover; }
     .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 80; display: flex; align-items: flex-end; justify-content: center; }
     .modal {
@@ -171,7 +176,7 @@
 <div id="toast" class="toast"></div>
 
 <main>
-  <!-- TAB 1: VENDER (GRID VISUAL) -->
+  <!-- TAB 1: VENDER -->
   <section id="tab-vender">
     <span class="label">Toca una botella para registrar venta</span>
     <div id="productGrid" class="prod-grid"></div>
@@ -182,7 +187,54 @@
     </div>
   </section>
 
-  <!-- TAB 2: POR COBRAR -->
+  <!-- TAB 2: COTIZAR -->
+  <section id="tab-cotizar" class="hidden">
+    <div class="card">
+      <span class="label">Nueva Cotización</span>
+      <input id="qCliente" type="text" placeholder="Nombre del cliente o empresa">
+      <div class="row2">
+        <select id="qSku">
+          <option value="ALEX-LIC-TRAD">Licorera · Tradicional (RD$1,500)</option>
+          <option value="ALEX-LIC-AVEL">Licorera · Avellana (RD$1,500)</option>
+          <option value="ALEX-LIC-PIST">Licorera · Pistacho (RD$1,500)</option>
+          <option value="ALEX-700-TRAD">700 ml · Tradicional (RD$1,600)</option>
+          <option value="ALEX-700-AVEL">700 ml · Avellana (RD$1,650)</option>
+          <option value="ALEX-700-PIST">700 ml · Pistacho (RD$1,650)</option>
+        </select>
+        <input id="qQty" type="number" inputmode="numeric" value="1" min="1" placeholder="Cant.">
+      </div>
+      <button type="button" class="btn-outline" style="width:100%;margin-bottom:12px;padding:10px;" onclick="addQuoteLine()">+ Agregar a la cotización</button>
+      <div id="qLines" style="margin-bottom:10px;"></div>
+
+      <span class="label">Ajuste / Entrega</span>
+      <div class="row2">
+        <select id="qAjuste" onchange="renderQuotePreview()">
+          <option value="none">Sin ajuste</option>
+          <option value="desc5">Descuento 5%</option>
+          <option value="desc10">Descuento 10%</option>
+          <option value="itbis">+ 18% ITBIS</option>
+        </select>
+        <input id="qEntrega" type="date" placeholder="Entrega prevista">
+      </div>
+      <div style="background:#FFFDF8;border:1px solid var(--border);border-radius:12px;padding:10px 12px;margin-bottom:12px;">
+        <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--muted);"><span>Subtotal</span><span id="qSub">RD$0</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--muted);"><span>Ajuste</span><span id="qAdj">RD$0</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:17px;font-weight:800;color:var(--green);margin-top:4px;"><span>Total Cotizado</span><span id="qTot">RD$0</span></div>
+      </div>
+
+      <div class="row2">
+        <button type="button" class="btn-outline" onclick="copyQuoteWhatsApp()">📋 Copiar WhatsApp</button>
+        <button type="button" class="btn-primary" onclick="submitQuote()">Guardar</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <span class="label">Cotizaciones guardadas</span>
+      <div id="quotesList">Sin cotizaciones</div>
+    </div>
+  </section>
+
+  <!-- TAB 3: POR COBRAR -->
   <section id="tab-cobrar" class="hidden">
     <div class="card">
       <span class="label">Transferencias SMN por confirmar</span>
@@ -194,7 +246,7 @@
     </div>
   </section>
 
-  <!-- TAB 3: CAJA CHICA -->
+  <!-- TAB 4: CAJA CHICA -->
   <section id="tab-caja" class="hidden">
     <div class="card">
       <span class="label">Efectivo esperado en Caja Chica</span>
@@ -223,7 +275,7 @@
     </div>
   </section>
 
-  <!-- TAB 4: STOCK Y CIERRE -->
+  <!-- TAB 5: STOCK Y CIERRE -->
   <section id="tab-stock" class="hidden">
     <div class="card">
       <span class="label">Resumen General (Sheet)</span>
@@ -234,13 +286,13 @@
     </div>
 
     <div class="card">
-      <span class="label">Inventario actual (nuevas salidas)</span>
+      <span class="label">Inventario actual</span>
       <div id="inventoryList">Cargando...</div>
     </div>
   </section>
 </main>
 
-<!-- Modal VENTA RÁPIDA al tocar botella -->
+<!-- Modal VENTA RÁPIDA -->
 <div id="saleModal" class="modal-bg hidden" onclick="if(event.target===this)closeSaleModal()">
   <div class="modal">
     <div class="modal-prod">
@@ -319,7 +371,8 @@
 
 <nav>
   <button class="active" onclick="goTab('vender', this)"><span>🛒</span>Vender</button>
-  <button onclick="goTab('cobrar', this)"><span>⏳</span>Por Cobrar</button>
+  <button onclick="goTab('cotizar', this)"><span>📝</span>Cotizar</button>
+  <button onclick="goTab('cobrar', this)"><span>⏳</span>Cobros</button>
   <button onclick="goTab('caja', this)"><span>💵</span>Caja</button>
   <button onclick="goTab('stock', this)"><span>📦</span>Stock</button>
 </nav>
@@ -336,10 +389,11 @@ const CATALOG = [
 ];
 
 let PIN = localStorage.getItem('alex_pin') || '';
-let state = { inventory: [], sales: [], cashMoves: [], directSales: [], summary: {} };
+let state = { inventory: [], sales: [], cashMoves: [], directSales: [], quotes: [], summary: {} };
 let form = { presentacion: 'Licorera 16.9 oz', sabor: 'Tradicional', qty: 1, porConfirmar: false, salePhoto: '', modalPhoto: '', modalTarget: null };
+let quoteLines = [];
 
-function fmt(n) { return 'RD$' + (Number(n) || 0).toLocaleString('en-US'); }
+function fmt(n) { return 'RD$' + (Number(n) || 0).toLocaleString('en-US', { maximumFractionDigits: 2 }); }
 function toast(msg) {
   const el = document.getElementById('toast');
   el.textContent = msg; el.style.display = 'block';
@@ -384,7 +438,7 @@ async function apiPost(payload) {
 }
 
 function goTab(id, btn) {
-  ['vender','cobrar','caja','stock'].forEach(t => document.getElementById('tab-' + t).classList.add('hidden'));
+  ['vender','cotizar','cobrar','caja','stock'].forEach(t => document.getElementById('tab-' + t).classList.add('hidden'));
   document.getElementById('tab-' + id).classList.remove('hidden');
   document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
@@ -413,11 +467,7 @@ function renderProductGrid() {
 function openSaleModal(sku) {
   const p = CATALOG.find(x => x.sku === sku);
   const inv = state.inventory.find(i => i.sku === sku);
-  form.presentacion = p.presentacion;
-  form.sabor = p.sabor;
-  form.qty = 1;
-  form.salePhoto = '';
-  form.porConfirmar = false;
+  form.presentacion = p.presentacion; form.sabor = p.sabor; form.qty = 1; form.salePhoto = ''; form.porConfirmar = false;
   document.getElementById('mImg').src = p.img;
   document.getElementById('mTitle').textContent = p.presentacion;
   document.getElementById('mSub').textContent = 'Sabor ' + p.sabor + (inv ? ' · Stock: ' + inv.stockActual : '');
@@ -428,31 +478,14 @@ function openSaleModal(sku) {
   document.getElementById('bancoRefInput').value = '';
   document.getElementById('receiptPreview').style.display = 'none';
   document.getElementById('receiptInput').value = '';
-  toggleTransferUI();
-  setConf(false);
-  updateTotal();
+  toggleTransferUI(); setConf(false); updateTotal();
   document.getElementById('saleModal').classList.remove('hidden');
 }
 function closeSaleModal() { document.getElementById('saleModal').classList.add('hidden'); }
-
-function chgQty(d) {
-  form.qty = Math.max(1, form.qty + d);
-  document.getElementById('qtyVal').textContent = form.qty;
-  updateTotal();
-}
-function updateTotal() {
-  const p = Number(document.getElementById('priceInput').value) || 0;
-  document.getElementById('sellBtn').textContent = 'COBRAR ' + fmt(form.qty * p);
-}
-function toggleTransferUI() {
-  const isT = document.getElementById('metodoSelect').value === 'Transferencia';
-  document.getElementById('transferBox').classList.toggle('hidden', !isT);
-}
-function setConf(porConf) {
-  form.porConfirmar = porConf;
-  document.getElementById('btnConf').classList.toggle('active', !porConf);
-  document.getElementById('btnPorConf').classList.toggle('active', porConf);
-}
+function chgQty(d) { form.qty = Math.max(1, form.qty + d); document.getElementById('qtyVal').textContent = form.qty; updateTotal(); }
+function updateTotal() { const p = Number(document.getElementById('priceInput').value) || 0; document.getElementById('sellBtn').textContent = 'COBRAR ' + fmt(form.qty * p); }
+function toggleTransferUI() { document.getElementById('transferBox').classList.toggle('hidden', document.getElementById('metodoSelect').value !== 'Transferencia'); }
+function setConf(porConf) { form.porConfirmar = porConf; document.getElementById('btnConf').classList.toggle('active', !porConf); document.getElementById('btnPorConf').classList.toggle('active', porConf); }
 
 function handlePhoto(input, previewId, target) {
   const file = input.files && input.files[0];
@@ -483,24 +516,74 @@ async function submitSale() {
     const res = await apiPost({
       action: 'addSale',
       canal: document.getElementById('canalSelect').value,
-      presentacion: form.presentacion,
-      sabor: form.sabor,
-      cantidad: form.qty,
+      presentacion: form.presentacion, sabor: form.sabor, cantidad: form.qty,
       precioUnit: Number(document.getElementById('priceInput').value) || 0,
-      metodo,
-      porConfirmar: metodo === 'Transferencia' ? form.porConfirmar : false,
+      metodo, porConfirmar: metodo === 'Transferencia' ? form.porConfirmar : false,
       bancoRef: document.getElementById('bancoRefInput').value.trim(),
       cliente: document.getElementById('clienteInput').value.trim(),
-      receiptBase64: metodo === 'Transferencia' ? form.salePhoto : '',
-      receiptMime: 'image/jpeg'
+      receiptBase64: metodo === 'Transferencia' ? form.salePhoto : '', receiptMime: 'image/jpeg'
     });
-    if (res.ok) {
-      closeSaleModal();
-      toast('Venta registrada: ' + fmt(res.total));
-      await loadData();
-    } else toast(res.error || 'Error al guardar');
+    if (res.ok) { closeSaleModal(); toast('Venta registrada: ' + fmt(res.total)); await loadData(); }
+    else toast(res.error || 'Error al guardar');
   } catch (e) { toast('Error de red'); }
   btn.disabled = false; updateTotal();
+}
+
+// COTIZACIONES
+function addQuoteLine() {
+  const sku = document.getElementById('qSku').value;
+  const qty = Math.max(1, Number(document.getElementById('qQty').value) || 1);
+  const p = CATALOG.find(x => x.sku === sku);
+  const inv = state.inventory.find(i => i.sku === sku);
+  const unit = inv ? inv.precio : p.precio;
+  quoteLines.push({ sku, label: p.presentacion + ' ' + p.sabor, qty, unit, sub: qty * unit });
+  document.getElementById('qQty').value = 1;
+  renderQuotePreview();
+}
+function removeQuoteLine(idx) { quoteLines.splice(idx, 1); renderQuotePreview(); }
+function calcQuoteTotals() {
+  const sub = quoteLines.reduce((a, l) => a + l.sub, 0);
+  const mode = document.getElementById('qAjuste').value;
+  let adj = 0;
+  if (mode === 'desc5') adj = -sub * 0.05;
+  else if (mode === 'desc10') adj = -sub * 0.10;
+  else if (mode === 'itbis') adj = sub * 0.18;
+  return { sub, adj, tot: sub + adj, units: quoteLines.reduce((a, l) => a + l.qty, 0) };
+}
+function renderQuotePreview() {
+  document.getElementById('qLines').innerHTML = quoteLines.map((l, idx) => `
+    <div class="item">
+      <span style="font-size:13px">${l.qty}x ${l.label} (${fmt(l.unit)})</span>
+      <div><strong>${fmt(l.sub)}</strong> <button type="button" onclick="removeQuoteLine(${idx})" style="border:none;background:none;color:#B42318;font-weight:700;cursor:pointer;">✕</button></div>
+    </div>`).join('');
+  const { sub, adj, tot } = calcQuoteTotals();
+  document.getElementById('qSub').textContent = fmt(sub);
+  document.getElementById('qAdj').textContent = fmt(adj);
+  document.getElementById('qTot').textContent = fmt(tot);
+}
+function copyQuoteWhatsApp() {
+  if (!quoteLines.length) return toast('Agrega al menos un producto');
+  const cli = document.getElementById('qCliente').value.trim() || 'Cliente';
+  const { sub, adj, tot } = calcQuoteTotals();
+  const linesTxt = quoteLines.map(l => `• ${l.qty}x Alexander ${l.label} — ${fmt(l.sub)}`).join('\n');
+  const adjTxt = adj !== 0 ? `\nAjuste: ${fmt(adj)}` : '';
+  const msg = `🎄 *Cotización Alexander — Dulce Navidad*\nCliente: ${cli}\n\n${linesTxt}\n\nSubtotal: ${fmt(sub)}${adjTxt}\n*Total: ${fmt(tot)}*`;
+  navigator.clipboard?.writeText(msg).then(() => toast('Cotización copiada para WhatsApp')).catch(() => alert(msg));
+}
+async function submitQuote() {
+  const cli = document.getElementById('qCliente').value.trim();
+  if (!cli || !quoteLines.length) return toast('Falta cliente o productos');
+  const { sub, adj, tot, units } = calcQuoteTotals();
+  const propuesta = quoteLines.map(l => `${l.qty}x ${l.label}`).join(' + ');
+  const res = await apiPost({
+    action: 'addQuote', cliente: cli, propuesta, unidades: units,
+    subtotal: sub, ajuste: adj, total: tot, entrega: document.getElementById('qEntrega').value
+  });
+  if (res.ok) {
+    toast('Cotización guardada');
+    quoteLines = []; document.getElementById('qCliente').value = '';
+    renderQuotePreview(); await loadData();
+  } else toast(res.error || 'Error');
 }
 
 async function submitCashMove() {
@@ -510,31 +593,24 @@ async function submitCashMove() {
   const res = await apiPost({ action: 'addCashMove', tipo: document.getElementById('cajaTipo').value, monto, concepto });
   if (res.ok) {
     toast('Movimiento guardado');
-    document.getElementById('cajaMonto').value = '';
-    document.getElementById('cajaConcepto').value = '';
+    document.getElementById('cajaMonto').value = ''; document.getElementById('cajaConcepto').value = '';
     await loadData();
   } else toast(res.error || 'Error');
 }
 
 function openConfirmModal(source, row, desc) {
-  form.modalTarget = { source, row };
-  form.modalPhoto = '';
+  form.modalTarget = { source, row }; form.modalPhoto = '';
   document.getElementById('modalDesc').textContent = desc;
   document.getElementById('modalBancoRef').value = '';
   document.getElementById('modalPreview').style.display = 'none';
   document.getElementById('confirmModal').classList.remove('hidden');
 }
 function closeModal() { document.getElementById('confirmModal').classList.add('hidden'); }
-
 async function submitConfirmPayment() {
   if (!form.modalTarget) return;
   const res = await apiPost({
-    action: 'confirmPayment',
-    source: form.modalTarget.source,
-    row: form.modalTarget.row,
-    bancoRef: document.getElementById('modalBancoRef').value.trim(),
-    receiptBase64: form.modalPhoto,
-    receiptMime: 'image/jpeg'
+    action: 'confirmPayment', source: form.modalTarget.source, row: form.modalTarget.row,
+    bancoRef: document.getElementById('modalBancoRef').value.trim(), receiptBase64: form.modalPhoto, receiptMime: 'image/jpeg'
   });
   closeModal();
   if (res.ok) { toast('Cobro confirmado'); await loadData(); } else toast(res.error || 'Error');
@@ -549,7 +625,7 @@ async function addStockPrompt(row, label) {
 
 function renderAll() {
   renderProductGrid();
-  const rec = state.sales.slice(0, 10).map(s => `
+  document.getElementById('recentSalesList').innerHTML = state.sales.slice(0, 10).map(s => `
     <div class="item">
       <div>
         <strong>${s.cantidad}x ${s.presentacion} · ${s.sabor}</strong>
@@ -559,29 +635,32 @@ function renderAll() {
         <strong>${fmt(s.total)}</strong><br>
         <span class="badge ${s.estado==='Cobrado'?'b-ok':'b-warn'}">${s.estado}</span>
       </div>
-    </div>`).join('');
-  document.getElementById('recentSalesList').innerHTML = rec || 'Sin ventas';
+    </div>`).join('') || '<small style="color:var(--muted)">Sin ventas aún</small>';
 
-  const pSmn = state.sales.filter(s => s.estado === 'Por confirmar').map(s => `
+  document.getElementById('quotesList').innerHTML = (state.quotes || []).map(q => `
+    <div class="item">
+      <div><strong>${q.cliente}</strong><div style="font-size:12px;color:var(--muted)">${q.propuesta} · ${q.fecha}</div></div>
+      <div style="text-align:right"><strong>${fmt(q.total)}</strong><br><span class="badge b-warn">${q.estado}</span></div>
+    </div>`).join('') || '<small style="color:var(--muted)">Sin cotizaciones aún</small>';
+
+  document.getElementById('pendingSmnList').innerHTML = state.sales.filter(s => s.estado === 'Por confirmar').map(s => `
     <div class="item">
       <div><strong>${s.cliente || s.id}</strong><div style="font-size:12px;color:var(--muted)">${s.cantidad}x ${s.presentacion} · ${fmt(s.total)}</div></div>
       <button class="btn-sm" onclick="openConfirmModal('ventas', ${s.row}, '${(s.cliente||s.id)} — ${fmt(s.total)}')">Confirmar</button>
-    </div>`).join('');
-  document.getElementById('pendingSmnList').innerHTML = pSmn || '<small style="color:var(--muted)">Todo confirmado</small>';
+    </div>`).join('') || '<small style="color:var(--muted)">Todo confirmado</small>';
 
-  const pDir = state.directSales.filter(d => d.estado !== 'Cobrado').map(d => `
+  document.getElementById('pendingDirectList').innerHTML = state.directSales.filter(d => d.estado !== 'Cobrado').map(d => `
     <div class="item">
       <div><strong>${d.factura} · ${d.cliente}</strong><div style="font-size:12px;color:var(--muted)">${d.detalle} · Pendiente ${fmt(d.pendiente)}</div></div>
       <button class="btn-sm" onclick="openConfirmModal('directas', ${d.row}, '${d.factura} ${d.cliente} — ${fmt(d.pendiente)}')">Cobrado</button>
-    </div>`).join('');
-  document.getElementById('pendingDirectList').innerHTML = pDir || '<small style="color:var(--muted)">Sin facturas pendientes</small>';
+    </div>`).join('') || '<small style="color:var(--muted)">Sin facturas pendientes</small>';
 
   document.getElementById('cajaTotal').textContent = fmt(state.summary['Efectivo Actual en Caja Chica']);
   document.getElementById('cashMovesList').innerHTML = state.cashMoves.slice(0, 12).map(m => `
     <div class="item">
       <div><strong>${m.tipo}</strong><div style="font-size:12px;color:var(--muted)">${m.concepto} · ${m.fecha}</div></div>
       <strong>${fmt(m.monto)}</strong>
-    </div>`).join('') || 'Sin movimientos';
+    </div>`).join('') || '<small style="color:var(--muted)">Sin movimientos aún</small>';
 
   document.getElementById('summaryList').innerHTML = Object.entries(state.summary).map(([k,v]) => `
     <div class="item"><span style="font-size:13px">${k}</span><strong>${k.includes('Botellas') ? v : fmt(v)}</strong></div>`).join('');
