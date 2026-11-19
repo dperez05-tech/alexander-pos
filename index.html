@@ -1,0 +1,539 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Alexander POS">
+  <meta name="theme-color" content="#1B4332">
+  <link rel="manifest" href="./manifest.json">
+  <title>Alexander — Dulce Navidad POS</title>
+  <style>
+    :root {
+      --bg: #FAF6EE;
+      --card: #FFFFFF;
+      --green: #1B4332;
+      --green-light: #2D6A4F;
+      --gold: #C89B3C;
+      --text: #1E2421;
+      --muted: #64746B;
+      --border: #E4DDD0;
+      --danger: #B42318;
+      --warn: #B54708;
+      --ok: #126E47;
+      --radius: 14px;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body {
+      margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg); color: var(--text);
+      padding-bottom: calc(78px + env(safe-area-inset-bottom));
+    }
+    header {
+      background: var(--green); color: #FAF6EE;
+      padding: calc(14px + env(safe-area-inset-top)) 16px 14px;
+      display: flex; justify-content: space-between; align-items: center;
+      position: sticky; top: 0; z-index: 20;
+    }
+    header h1 { margin: 0; font-size: 18px; font-family: Georgia, serif; color: var(--gold); letter-spacing: .3px; }
+    header small { display: block; font-size: 11px; color: #D8E2DC; margin-top: 2px; }
+    .refresh-btn {
+      background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.25);
+      color: #fff; border-radius: 10px; padding: 7px 11px; font-size: 13px; cursor: pointer;
+    }
+    main { max-width: 540px; margin: 0 auto; padding: 14px; }
+    .card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 14px; margin-bottom: 12px;
+      box-shadow: 0 2px 6px rgba(27,67,50,.05);
+    }
+    .label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); margin-bottom: 8px; display: block; }
+    .seg { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); margin-bottom: 14px; }
+    .seg button {
+      border: 1.5px solid var(--border); background: #fff; color: var(--text);
+      border-radius: 12px; padding: 12px 8px; font-size: 15px; font-weight: 600; cursor: pointer;
+    }
+    .seg button.active { background: var(--green); color: #fff; border-color: var(--green); }
+    .qty-row { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+    .qty-btn {
+      width: 48px; height: 48px; border-radius: 12px; border: 1.5px solid var(--border);
+      background: #fff; font-size: 22px; font-weight: 700; cursor: pointer; color: var(--green);
+    }
+    .qty-val { font-size: 22px; font-weight: 700; min-width: 34px; text-align: center; }
+    input, select {
+      width: 100%; padding: 12px; border: 1.5px solid var(--border); border-radius: 12px;
+      font-size: 16px; background: #fff; color: var(--text); margin-bottom: 12px;
+    }
+    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .photo-box {
+      border: 2px dashed var(--gold); border-radius: 12px; padding: 12px;
+      text-align: center; background: #FFFDF8; margin-bottom: 14px; cursor: pointer;
+    }
+    .photo-box input { display: none; }
+    .photo-preview { max-width: 100%; max-height: 160px; border-radius: 8px; margin-top: 8px; display: none; }
+    .btn-primary {
+      width: 100%; background: var(--green); color: #FAF6EE; border: none;
+      border-radius: 14px; padding: 15px; font-size: 17px; font-weight: 700; cursor: pointer;
+    }
+    .btn-primary:disabled { opacity: .55; }
+    .btn-sm {
+      background: var(--green-light); color: #fff; border: none; border-radius: 9px;
+      padding: 8px 12px; font-size: 13px; font-weight: 600; cursor: pointer;
+    }
+    .btn-outline {
+      background: #fff; color: var(--green); border: 1.5px solid var(--green);
+      border-radius: 9px; padding: 7px 11px; font-size: 13px; font-weight: 600; cursor: pointer;
+    }
+    nav {
+      position: fixed; bottom: 0; left: 0; right: 0; background: #fff;
+      border-top: 1px solid var(--border); display: grid; grid-template-columns: repeat(4, 1fr);
+      padding-bottom: env(safe-area-inset-bottom); z-index: 30;
+    }
+    nav button {
+      border: none; background: none; padding: 10px 4px; font-size: 12px;
+      color: var(--muted); font-weight: 600; cursor: pointer;
+    }
+    nav button.active { color: var(--green); font-weight: 800; }
+    nav button span { display: block; font-size: 20px; margin-bottom: 2px; }
+    .hidden { display: none !important; }
+    .item { border-bottom: 1px solid var(--border); padding: 10px 0; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+    .item:last-child { border-bottom: none; }
+    .badge { font-size: 11px; padding: 3px 8px; border-radius: 99px; font-weight: 700; display: inline-block; }
+    .b-ok { background: #E6F4EA; color: var(--ok); }
+    .b-warn { background: #FEF3C7; color: var(--warn); }
+    .b-bad { background: #FEE4E2; color: var(--danger); }
+    .kpi { font-size: 26px; font-weight: 800; color: var(--green); margin: 4px 0; }
+    .toast {
+      position: fixed; top: 72px; left: 50%; transform: translateX(-50%);
+      background: #1E2421; color: #fff; padding: 10px 16px; border-radius: 99px;
+      font-size: 14px; font-weight: 600; z-index: 50; display: none;
+    }
+    .pin-screen {
+      position: fixed; inset: 0; background: var(--green); color: #FAF6EE;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      padding: 24px; z-index: 100;
+    }
+    .pin-card { background: #fff; color: var(--text); border-radius: 18px; padding: 22px; width: 100%; max-width: 320px; text-align: center; }
+    .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 80; display: flex; align-items: flex-end; justify-content: center; }
+    .modal { background: #fff; width: 100%; max-width: 540px; border-radius: 18px 18px 0 0; padding: 18px; padding-bottom: calc(20px + env(safe-area-inset-bottom)); }
+  </style>
+</head>
+<body>
+
+<div id="pinScreen" class="pin-screen">
+  <div class="pin-card">
+    <h2 style="font-family:Georgia,serif;color:var(--green);margin:0 0 6px;">Alexander</h2>
+    <p style="margin:0 0 16px;color:var(--muted);font-size:14px;">Dulce Navidad · POS &amp; Caja</p>
+    <input id="pinInput" type="password" inputmode="numeric" placeholder="Ingresa el PIN" autocomplete="off">
+    <button class="btn-primary" onclick="unlock()">Entrar</button>
+  </div>
+</div>
+
+<header>
+  <div>
+    <h1>Alexander POS</h1>
+    <small id="statusSub">Dulce Navidad · En línea</small>
+  </div>
+  <button class="refresh-btn" onclick="loadData()">↻ Actualizar</button>
+</header>
+
+<div id="toast" class="toast"></div>
+
+<main>
+  <!-- TAB 1: VENDER -->
+  <section id="tab-vender">
+    <div class="card">
+      <span class="label">1. Presentación</span>
+      <div class="seg" id="presSeg">
+        <button type="button" class="active" onclick="setPres('Licorera 16.9 oz', this)">Licorera 16.9 oz</button>
+        <button type="button" onclick="setPres('700 ml', this)">Botella 700 ml</button>
+      </div>
+
+      <span class="label">2. Sabor</span>
+      <div class="seg" id="saborSeg">
+        <button type="button" class="active" onclick="setSabor('Tradicional', this)">Tradicional</button>
+        <button type="button" onclick="setSabor('Avellana', this)">Avellana</button>
+        <button type="button" onclick="setSabor('Pistacho', this)">Pistacho</button>
+      </div>
+
+      <div class="row2">
+        <div>
+          <span class="label">3. Cantidad</span>
+          <div class="qty-row">
+            <button type="button" class="qty-btn" onclick="chgQty(-1)">−</button>
+            <span class="qty-val" id="qtyVal">1</span>
+            <button type="button" class="qty-btn" onclick="chgQty(1)">+</button>
+          </div>
+        </div>
+        <div>
+          <span class="label">Precio Unit. (RD$)</span>
+          <input id="priceInput" type="number" inputmode="numeric" value="1500" oninput="updateTotal()">
+        </div>
+      </div>
+
+      <span class="label">4. Canal y Método de Pago</span>
+      <div class="row2">
+        <select id="canalSelect">
+          <option value="SMN 27 Feb">SMN 27 Feb</option>
+          <option value="Venta Directa">Venta Directa</option>
+        </select>
+        <select id="metodoSelect" onchange="toggleTransferUI()">
+          <option value="Efectivo">💵 Efectivo</option>
+          <option value="Transferencia">🏦 Transferencia</option>
+        </select>
+      </div>
+
+      <div id="transferBox" class="hidden">
+        <div class="seg">
+          <button type="button" id="btnConf" class="active" onclick="setConf(false)">✓ Confirmada</button>
+          <button type="button" id="btnPorConf" onclick="setConf(true)">⏳ Por confirmar</button>
+        </div>
+        <input id="bancoRefInput" type="text" placeholder="Banco / Referencia (ej. Popular 6111...)">
+        <label class="photo-box">
+          <input id="receiptInput" type="file" accept="image/*" capture="environment" onchange="handlePhoto(this, 'receiptPreview', 'sale')">
+          <div>📸 <strong>Foto del comprobante</strong><br><small style="color:var(--muted)">Toca para abrir cámara o elegir foto</small></div>
+          <img id="receiptPreview" class="photo-preview" alt="Vista previa">
+        </label>
+      </div>
+
+      <input id="clienteInput" type="text" placeholder="Cliente (opcional, ej. María Pérez)">
+      <button id="sellBtn" class="btn-primary" onclick="submitSale()">COBRAR RD$1,500</button>
+    </div>
+
+    <div class="card">
+      <span class="label">Últimas ventas</span>
+      <div id="recentSalesList">Cargando...</div>
+    </div>
+  </section>
+
+  <!-- TAB 2: POR COBRAR -->
+  <section id="tab-cobrar" class="hidden">
+    <div class="card">
+      <span class="label">Transferencias SMN por confirmar</span>
+      <div id="pendingSmnList">Sin pendientes</div>
+    </div>
+    <div class="card">
+      <span class="label">Ventas directas pendientes</span>
+      <div id="pendingDirectList">Sin pendientes</div>
+    </div>
+  </section>
+
+  <!-- TAB 3: CAJA CHICA -->
+  <section id="tab-caja" class="hidden">
+    <div class="card">
+      <span class="label">Efectivo esperado en Caja Chica</span>
+      <div class="kpi" id="cajaTotal">RD$0</div>
+      <small style="color:var(--muted)">Fondo inicial + Ventas efectivo − Gastos − Depósitos</small>
+    </div>
+
+    <div class="card">
+      <span class="label">Registrar movimiento</span>
+      <select id="cajaTipo">
+        <option value="Gasto">🧾 Gasto (hielo, bolsas, etc.)</option>
+        <option value="Depósito Banco">🏦 Depósito al banco</option>
+        <option value="Fondo Inicial">💵 Fondo inicial / Cambio</option>
+        <option value="Retiro">📤 Retiro de efectivo</option>
+      </select>
+      <div class="row2">
+        <input id="cajaMonto" type="number" inputmode="numeric" placeholder="Monto RD$">
+        <input id="cajaConcepto" type="text" placeholder="Concepto">
+      </div>
+      <button class="btn-primary" onclick="submitCashMove()">Guardar movimiento</button>
+    </div>
+
+    <div class="card">
+      <span class="label">Movimientos recientes</span>
+      <div id="cashMovesList">Cargando...</div>
+    </div>
+  </section>
+
+  <!-- TAB 4: STOCK Y CIERRE -->
+  <section id="tab-stock" class="hidden">
+    <div class="card">
+      <span class="label">Resumen General (Sheet)</span>
+      <div id="summaryList">Cargando...</div>
+      <div style="margin-top:12px;">
+        <a href="https://docs.google.com/spreadsheets/d/1P9kuKcbjICbH8MoijY5WyrEbgw7aWt_uWi9NJh8Hpnk/edit" target="_blank" class="btn-outline" style="display:inline-block;text-decoration:none;">Abrir Google Sheet ↗</a>
+      </div>
+    </div>
+
+    <div class="card">
+      <span class="label">Inventario actual (nuevas salidas)</span>
+      <div id="inventoryList">Cargando...</div>
+    </div>
+  </section>
+</main>
+
+<!-- Modal confirmar pago con foto -->
+<div id="confirmModal" class="modal-bg hidden">
+  <div class="modal">
+    <h3 style="margin:0 0 8px;">Confirmar Cobro</h3>
+    <p id="modalDesc" style="margin:0 0 12px;color:var(--muted);font-size:14px;"></p>
+    <input id="modalBancoRef" type="text" placeholder="Banco / Referencia">
+    <label class="photo-box" style="display:block;">
+      <input id="modalReceiptInput" type="file" accept="image/*" capture="environment" onchange="handlePhoto(this, 'modalPreview', 'modal')">
+      <div>📸 <strong>Adjuntar foto del comprobante</strong></div>
+      <img id="modalPreview" class="photo-preview" alt="Comprobante">
+    </label>
+    <div class="row2">
+      <button class="btn-outline" onclick="closeModal()">Cancelar</button>
+      <button class="btn-primary" onclick="submitConfirmPayment()">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<nav>
+  <button class="active" onclick="goTab('vender', this)"><span>🛒</span>Vender</button>
+  <button onclick="goTab('cobrar', this)"><span>⏳</span>Por Cobrar</button>
+  <button onclick="goTab('caja', this)"><span>💵</span>Caja</button>
+  <button onclick="goTab('stock', this)"><span>📦</span>Stock</button>
+</nav>
+
+<script>
+const API_URL = 'https://script.google.com/macros/s/AKfycbw9jYrsPKi-0GsCwpJ2DxJEHa5ekFNaobFvGslVXgameVeYkuElpGxQ8leE0Q0Q6Khe/exec';
+let PIN = localStorage.getItem('alex_pin') || '';
+let state = { inventory: [], sales: [], cashMoves: [], directSales: [], summary: {} };
+let form = { presentacion: 'Licorera 16.9 oz', sabor: 'Tradicional', qty: 1, porConfirmar: false, salePhoto: '', modalPhoto: '', modalTarget: null };
+
+function fmt(n) { return 'RD$' + (Number(n) || 0).toLocaleString('en-US'); }
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.style.display = 'block';
+  setTimeout(() => el.style.display = 'none', 2800);
+}
+
+if (PIN) { document.getElementById('pinScreen').classList.add('hidden'); loadData(); }
+
+function unlock() {
+  const v = document.getElementById('pinInput').value.trim();
+  if (!v) return;
+  PIN = v;
+  loadData(true);
+}
+
+async function loadData(fromUnlock) {
+  document.getElementById('statusSub').textContent = 'Sincronizando...';
+  try {
+    const r = await fetch(API_URL + '?pin=' + encodeURIComponent(PIN));
+    const d = await r.json();
+    if (!d.ok) {
+      localStorage.removeItem('alex_pin');
+      document.getElementById('pinScreen').classList.remove('hidden');
+      toast(d.error || 'PIN incorrecto');
+      return;
+    }
+    if (fromUnlock) { localStorage.setItem('alex_pin', PIN); document.getElementById('pinScreen').classList.add('hidden'); }
+    state = d;
+    renderAll();
+    document.getElementById('statusSub').textContent = 'Dulce Navidad · Actualizado';
+  } catch (e) {
+    document.getElementById('statusSub').textContent = 'Sin conexión';
+    toast('Error de red al sincronizar');
+  }
+}
+
+async function apiPost(payload) {
+  payload.pin = PIN;
+  const r = await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(payload) });
+  return await r.json();
+}
+
+function goTab(id, btn) {
+  ['vender','cobrar','caja','stock'].forEach(t => document.getElementById('tab-' + t).classList.add('hidden'));
+  document.getElementById('tab-' + id).classList.remove('hidden');
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+function setPres(p, btn) {
+  form.presentacion = p;
+  document.querySelectorAll('#presSeg button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  syncDefaultPrice();
+}
+function setSabor(s, btn) {
+  form.sabor = s;
+  document.querySelectorAll('#saborSeg button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  syncDefaultPrice();
+}
+function syncDefaultPrice() {
+  const item = state.inventory.find(x => x.presentacion === form.presentacion && x.sabor === form.sabor);
+  const fallback = form.presentacion === '700 ml' ? (form.sabor === 'Tradicional' ? 1600 : 1650) : 1500;
+  document.getElementById('priceInput').value = item ? item.precio : fallback;
+  updateTotal();
+}
+function chgQty(d) {
+  form.qty = Math.max(1, form.qty + d);
+  document.getElementById('qtyVal').textContent = form.qty;
+  updateTotal();
+}
+function updateTotal() {
+  const p = Number(document.getElementById('priceInput').value) || 0;
+  document.getElementById('sellBtn').textContent = 'COBRAR ' + fmt(form.qty * p);
+}
+function toggleTransferUI() {
+  const isT = document.getElementById('metodoSelect').value === 'Transferencia';
+  document.getElementById('transferBox').classList.toggle('hidden', !isT);
+}
+function setConf(porConf) {
+  form.porConfirmar = porConf;
+  document.getElementById('btnConf').classList.toggle('active', !porConf);
+  document.getElementById('btnPorConf').classList.toggle('active', porConf);
+}
+
+function handlePhoto(input, previewId, target) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const img = new Image();
+    img.onload = () => {
+      const maxW = 1100;
+      const scale = Math.min(1, maxW / img.width);
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width * scale; canvas.height = img.height * scale;
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      const b64 = canvas.toDataURL('image/jpeg', 0.72);
+      const prev = document.getElementById(previewId);
+      prev.src = b64; prev.style.display = 'block';
+      if (target === 'sale') form.salePhoto = b64; else form.modalPhoto = b64;
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+async function submitSale() {
+  const btn = document.getElementById('sellBtn');
+  btn.disabled = true; btn.textContent = 'Guardando...';
+  const metodo = document.getElementById('metodoSelect').value;
+  try {
+    const res = await apiPost({
+      action: 'addSale',
+      canal: document.getElementById('canalSelect').value,
+      presentacion: form.presentacion,
+      sabor: form.sabor,
+      cantidad: form.qty,
+      precioUnit: Number(document.getElementById('priceInput').value) || 0,
+      metodo,
+      porConfirmar: metodo === 'Transferencia' ? form.porConfirmar : false,
+      bancoRef: document.getElementById('bancoRefInput').value.trim(),
+      cliente: document.getElementById('clienteInput').value.trim(),
+      receiptBase64: metodo === 'Transferencia' ? form.salePhoto : '',
+      receiptMime: 'image/jpeg'
+    });
+    if (res.ok) {
+      toast('Venta registrada: ' + fmt(res.total));
+      form.qty = 1; form.salePhoto = '';
+      document.getElementById('qtyVal').textContent = '1';
+      document.getElementById('clienteInput').value = '';
+      document.getElementById('bancoRefInput').value = '';
+      document.getElementById('receiptPreview').style.display = 'none';
+      document.getElementById('receiptInput').value = '';
+      await loadData();
+    } else toast(res.error || 'Error al guardar');
+  } catch (e) { toast('Error de red'); }
+  btn.disabled = false; updateTotal();
+}
+
+async function submitCashMove() {
+  const monto = Number(document.getElementById('cajaMonto').value);
+  const concepto = document.getElementById('cajaConcepto').value.trim();
+  if (!monto || !concepto) return toast('Falta monto o concepto');
+  const res = await apiPost({ action: 'addCashMove', tipo: document.getElementById('cajaTipo').value, monto, concepto });
+  if (res.ok) {
+    toast('Movimiento guardado');
+    document.getElementById('cajaMonto').value = '';
+    document.getElementById('cajaConcepto').value = '';
+    await loadData();
+  } else toast(res.error || 'Error');
+}
+
+function openConfirmModal(source, row, desc) {
+  form.modalTarget = { source, row };
+  form.modalPhoto = '';
+  document.getElementById('modalDesc').textContent = desc;
+  document.getElementById('modalBancoRef').value = '';
+  document.getElementById('modalPreview').style.display = 'none';
+  document.getElementById('confirmModal').classList.remove('hidden');
+}
+function closeModal() { document.getElementById('confirmModal').classList.add('hidden'); }
+
+async function submitConfirmPayment() {
+  if (!form.modalTarget) return;
+  const res = await apiPost({
+    action: 'confirmPayment',
+    source: form.modalTarget.source,
+    row: form.modalTarget.row,
+    bancoRef: document.getElementById('modalBancoRef').value.trim(),
+    receiptBase64: form.modalPhoto,
+    receiptMime: 'image/jpeg'
+  });
+  closeModal();
+  if (res.ok) { toast('Cobro confirmado'); await loadData(); } else toast(res.error || 'Error');
+}
+
+async function addStockPrompt(row, label) {
+  const val = prompt('¿Cuántas botellas sumas a ' + label + '?', '6');
+  if (!val || isNaN(val)) return;
+  const res = await apiPost({ action: 'addStock', row, cantidad: Number(val), mode: 'add' });
+  if (res.ok) { toast('Stock actualizado'); await loadData(); }
+}
+
+function renderAll() {
+  // Recent sales
+  const rec = state.sales.slice(0, 10).map(s => `
+    <div class="item">
+      <div>
+        <strong>${s.cantidad}x ${s.presentacion} · ${s.sabor}</strong>
+        <div style="font-size:12px;color:var(--muted)">${s.cliente || s.canal} · ${s.metodo} ${s.comprobante ? '· <a href="'+s.comprobante+'" target="_blank">📎 Foto</a>' : ''}</div>
+      </div>
+      <div style="text-align:right">
+        <strong>${fmt(s.total)}</strong><br>
+        <span class="badge ${s.estado==='Cobrado'?'b-ok':'b-warn'}">${s.estado}</span>
+      </div>
+    </div>`).join('');
+  document.getElementById('recentSalesList').innerHTML = rec || 'Sin ventas';
+
+  // Pending SMN
+  const pSmn = state.sales.filter(s => s.estado === 'Por confirmar').map(s => `
+    <div class="item">
+      <div><strong>${s.cliente || s.id}</strong><div style="font-size:12px;color:var(--muted)">${s.cantidad}x ${s.presentacion} · ${fmt(s.total)}</div></div>
+      <button class="btn-sm" onclick="openConfirmModal('ventas', ${s.row}, '${(s.cliente||s.id)} — ${fmt(s.total)}')">Confirmar</button>
+    </div>`).join('');
+  document.getElementById('pendingSmnList').innerHTML = pSmn || '<small style="color:var(--muted)">Todo confirmado</small>';
+
+  // Pending Direct
+  const pDir = state.directSales.filter(d => d.estado !== 'Cobrado').map(d => `
+    <div class="item">
+      <div><strong>${d.factura} · ${d.cliente}</strong><div style="font-size:12px;color:var(--muted)">${d.detalle} · Pendiente ${fmt(d.pendiente)}</div></div>
+      <button class="btn-sm" onclick="openConfirmModal('directas', ${d.row}, '${d.factura} ${d.cliente} — ${fmt(d.pendiente)}')">Cobrado</button>
+    </div>`).join('');
+  document.getElementById('pendingDirectList').innerHTML = pDir || '<small style="color:var(--muted)">Sin facturas pendientes</small>';
+
+  // Caja Chica
+  document.getElementById('cajaTotal').textContent = fmt(state.summary['Efectivo Actual en Caja Chica']);
+  document.getElementById('cashMovesList').innerHTML = state.cashMoves.slice(0, 12).map(m => `
+    <div class="item">
+      <div><strong>${m.tipo}</strong><div style="font-size:12px;color:var(--muted)">${m.concepto} · ${m.fecha}</div></div>
+      <strong>${fmt(m.monto)}</strong>
+    </div>`).join('') || 'Sin movimientos';
+
+  // Summary & Inventory
+  document.getElementById('summaryList').innerHTML = Object.entries(state.summary).map(([k,v]) => `
+    <div class="item"><span style="font-size:13px">${k}</span><strong>${k.includes('Botellas') ? v : fmt(v)}</strong></div>`).join('');
+
+  document.getElementById('inventoryList').innerHTML = state.inventory.map(i => `
+    <div class="item">
+      <div><strong>${i.presentacion} · ${i.sabor}</strong><div style="font-size:12px;color:var(--muted)">${fmt(i.precio)} · ${i.estado}</div></div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <strong>${i.stockActual}</strong>
+        <button class="btn-outline" onclick="addStockPrompt(${i.row}, '${i.presentacion} ${i.sabor}')">+ Stock</button>
+      </div>
+    </div>`).join('');
+}
+</script>
+</body>
+</html>
