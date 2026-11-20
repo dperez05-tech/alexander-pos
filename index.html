@@ -213,6 +213,10 @@
           <option value="ALEX-700-TRAD">700 ml · Tradicional (RD$1,600)</option>
           <option value="ALEX-700-AVEL">700 ml · Avellana (RD$1,600)</option>
           <option value="ALEX-700-PIST">700 ml · Pistacho (RD$1,600)</option>
+          <option value="ALEX-CAJ3-MIX">Cajita 3 sabores · Pistacho, Avellana, Tradicional (RD$700)</option>
+          <option value="ALEX-CAJ2-TP">Cajita 2 sabores · Tradicional y Pistacho (RD$600)</option>
+          <option value="ALEX-CAJ2-TA">Cajita 2 sabores · Tradicional y Avellana (RD$600)</option>
+          <option value="ALEX-CAJ2-PA">Cajita 2 sabores · Pistacho y Avellana (RD$600)</option>
         </select>
         <input id="qQty" type="number" inputmode="numeric" value="1" min="1" placeholder="Cant.">
       </div>
@@ -411,7 +415,11 @@ const CATALOG = [
   { sku: 'ALEX-LIC-PIST', presentacion: 'Licorera 16.9 oz', sabor: 'Pistacho',    precio: 1500, img: './assets/lic-pist.jpg' },
   { sku: 'ALEX-700-TRAD', presentacion: '700 ml',           sabor: 'Tradicional', precio: 1600, img: './assets/700-trad.jpg' },
   { sku: 'ALEX-700-AVEL', presentacion: '700 ml',           sabor: 'Avellana',    precio: 1600, img: './assets/700-avel.jpg' },
-  { sku: 'ALEX-700-PIST', presentacion: '700 ml',           sabor: 'Pistacho',    precio: 1600, img: './assets/700-pist.jpg' }
+  { sku: 'ALEX-700-PIST', presentacion: '700 ml',           sabor: 'Pistacho',    precio: 1600, img: './assets/700-pist.jpg' },
+  { sku: 'ALEX-CAJ3-MIX', presentacion: 'Cajita 3 sabores', sabor: 'Pistacho, Avellana, Tradicional', precio: 700, img: './assets/caj-3-sabores.jpg', sub: 'Pistacho, Avellana y Tradicional' },
+  { sku: 'ALEX-CAJ2-TP',  presentacion: 'Cajita 2 sabores', sabor: 'Tradicional y Pistacho',          precio: 600, img: './assets/caj-2-trad-pist.jpg', sub: 'Tradicional y Pistacho' },
+  { sku: 'ALEX-CAJ2-TA',  presentacion: 'Cajita 2 sabores', sabor: 'Tradicional y Avellana',          precio: 600, img: './assets/caj-2-trad-avel.jpg', sub: 'Tradicional y Avellana' },
+  { sku: 'ALEX-CAJ2-PA',  presentacion: 'Cajita 2 sabores', sabor: 'Pistacho y Avellana',             precio: 600, img: './assets/caj-2-pist-avel.jpg', sub: 'Pistacho y Avellana' }
 ];
 
 localStorage.removeItem('alex_pin');
@@ -495,7 +503,7 @@ function renderProductGrid() {
         </div>
         <div class="prod-body">
           <div class="prod-title">${p.presentacion}</div>
-          <div class="prod-sub">Sabor ${p.sabor}</div>
+          <div class="prod-sub">${p.sub || 'Sabor ' + p.sabor}</div>
           <div class="prod-price">${fmt(price)}</div>
         </div>
       </button>`;
@@ -522,7 +530,7 @@ function openSaleModal(sku) {
   form.presentacion = p.presentacion; form.sabor = p.sabor; form.qty = 1; form.salePhoto = ''; form.porConfirmar = false;
   document.getElementById('mImg').src = p.img;
   document.getElementById('mTitle').textContent = p.presentacion;
-  document.getElementById('mSub').textContent = 'Sabor ' + p.sabor;
+  document.getElementById('mSub').textContent = p.sub || ('Sabor ' + p.sabor);
   document.getElementById('qtyVal').textContent = '1';
   document.getElementById('priceInput').value = inv ? inv.precio : p.precio;
   document.getElementById('metodoSelect').value = 'Efectivo';
