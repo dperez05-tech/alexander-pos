@@ -230,8 +230,14 @@
   <!-- TAB 2: COTIZAR -->
   <section id="tab-cotizar" class="hidden">
     <div class="card">
-      <span class="label">Nueva Cotización</span>
-      <input id="qCliente" type="text" placeholder="Nombre del cliente o empresa">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <span class="label" id="qFormTitle" style="margin:0;">Nueva Cotización</span>
+        <button type="button" id="qCancelEditBtn" class="hidden" onclick="cancelEditQuote()" style="border:none;background:#FEE4E2;color:#B42318;border-radius:8px;padding:4px 9px;font-size:12px;font-weight:700;cursor:pointer;">✕ Cancelar edición</button>
+      </div>
+      <div class="row2">
+        <input id="qCliente" type="text" placeholder="Nombre del cliente o empresa">
+        <input id="qWhatsapp" type="tel" inputmode="tel" placeholder="📱 WhatsApp (opcional)">
+      </div>
       <div class="row2">
         <select id="qSku">
           <option value="ALEX-LIC-TRAD">Licorera · Tradicional (RD$1,500)</option>
@@ -267,13 +273,13 @@
       </div>
 
       <div class="row2">
-        <button type="button" class="btn-outline" onclick="copyQuoteWhatsApp()">📋 Copiar WhatsApp</button>
-        <button type="button" class="btn-primary" onclick="submitQuote()">Guardar</button>
+        <button type="button" class="btn-outline" onclick="copyQuoteWhatsApp()">📋 Copiar texto</button>
+        <button type="button" id="qSaveBtn" class="btn-primary" onclick="submitQuote()">Guardar y generar PDF</button>
       </div>
     </div>
 
     <div class="card">
-      <span class="label">Cotizaciones guardadas</span>
+      <span class="label">Cotizaciones guardadas (toca una para opciones)</span>
       <div id="quotesList">Sin cotizaciones</div>
     </div>
   </section>
@@ -310,7 +316,12 @@
         <input id="cajaMonto" type="number" inputmode="numeric" placeholder="Monto RD$">
         <input id="cajaConcepto" type="text" placeholder="Concepto">
       </div>
-      <button class="btn-primary" onclick="submitCashMove()">Guardar movimiento</button>
+      <label class="photo-box">
+        <input id="cashReceiptInput" type="file" accept="image/*" onchange="handlePhoto(this, 'cashPreview', 'cash')">
+        <div>📸 <strong>Foto de factura / comprobante (opcional)</strong><br><small style="color:var(--muted)">Para gastos, depósitos o retiros (arqueo general)</small></div>
+        <img id="cashPreview" class="photo-preview" alt="Factura caja">
+      </label>
+      <button id="cashSaveBtn" class="btn-primary" onclick="submitCashMove()">Guardar movimiento</button>
     </div>
 
     <div class="card">
@@ -453,6 +464,31 @@
   </div>
 </div>
 
+<!-- Modal ACCIONES DE COTIZACIÓN -->
+<div id="quoteActionModal" class="modal-bg hidden" onclick="if(event.target===this)closeQuoteActionModal()">
+  <div class="modal">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--border);">
+      <div>
+        <strong id="qaCliente" style="font-size:17px;color:var(--green);"></strong>
+        <div id="qaMeta" style="font-size:12px;color:var(--muted);margin-top:2px;"></div>
+      </div>
+      <button type="button" onclick="closeQuoteActionModal()" style="border:none;background:none;font-size:22px;color:var(--muted);cursor:pointer;">✕</button>
+    </div>
+    <div id="qaPropuesta" style="background:#FFFDF8;border:1px solid var(--border);border-radius:12px;padding:10px 12px;font-size:13px;margin-bottom:12px;"></div>
+
+    <input id="qaWhatsapp" type="tel" inputmode="tel" placeholder="📱 WhatsApp del cliente (ej. 8095551234)">
+
+    <button type="button" id="qaWaBtn" class="btn-primary" style="background:#128C7E;margin-bottom:8px;" onclick="sendQuotePdfWhatsApp()">📲 Enviar Cotización PDF por WhatsApp</button>
+    <button type="button" id="qaPdfBtn" class="btn-outline" style="width:100%;margin-bottom:8px;" onclick="viewQuotePdf()">📄 Ver / Generar Cotización PDF</button>
+    <button type="button" class="btn-primary" style="margin-bottom:8px;" onclick="convertQuoteToSale()">✅ Convertir en venta</button>
+    <div class="row2" style="margin-bottom:8px;">
+      <button type="button" class="btn-outline" onclick="startEditQuote()">✏️ Modificar</button>
+      <button type="button" class="btn-outline" style="border-color:#B54708;color:#B54708;" onclick="closeQuoteNoInterest()">🚫 No interesó</button>
+    </div>
+    <button type="button" class="btn-outline" style="width:100%;border-color:#B42318;color:#B42318;background:#FFF5F5;" onclick="deleteQuoteAction()">🗑️ Borrar cotización</button>
+  </div>
+</div>
+
 <nav>
   <button class="active" onclick="goTab('vender', this)"><span>🛒</span>Vender</button>
   <button onclick="goTab('cotizar', this)"><span>📝</span>Cotizar</button>
@@ -479,9 +515,12 @@ const CATALOG = [
 localStorage.removeItem('alex_pin');
 let PIN = '';
 let state = { inventory: [], sales: [], cashMoves: [], directSales: [], quotes: [], summary: {} };
-let form = { sku: '', presentacion: 'Licorera 16.9 oz', sabor: 'Tradicional', qty: 1, porConfirmar: false, salePhoto: '', modalPhoto: '', modalTarget: null };
+let form = { sku: '', presentacion: 'Licorera 16.9 oz', sabor: 'Tradicional', qty: 1, porConfirmar: false, salePhoto: '', modalPhoto: '', cashPhoto: '', modalTarget: null };
 let cart = [];
 let quoteLines = [];
+let editingQuoteRow = null;
+let activeQuote = null;
+let convertingQuoteRow = null;
 
 function fmt(n) { return 'RD$' + (Number(n) || 0).toLocaleString('en-US', { maximumFractionDigits: 2 }); }
 function toast(msg) {
@@ -713,7 +752,9 @@ function handlePhoto(input, previewId, target) {
       const b64 = canvas.toDataURL('image/jpeg', 0.72);
       const prev = document.getElementById(previewId);
       prev.src = b64; prev.style.display = 'block';
-      if (target === 'sale') form.salePhoto = b64; else form.modalPhoto = b64;
+      if (target === 'sale') form.salePhoto = b64;
+      else if (target === 'cash') form.cashPhoto = b64;
+      else form.modalPhoto = b64;
     };
     img.src = ev.target.result;
   };
@@ -744,10 +785,12 @@ async function submitSale() {
       cliente: document.getElementById('clienteInput').value.trim(),
       whatsapp: waRaw,
       generateInvoice: !!waNum,
+      fromQuoteRow: convertingQuoteRow || '',
       receiptBase64: metodo === 'Transferencia' ? form.salePhoto : '', receiptMime: 'image/jpeg'
     });
     if (res.ok) {
       cart = [];
+      convertingQuoteRow = null;
       form.salePhoto = ''; form.porConfirmar = false;
       document.getElementById('metodoSelect').value = 'Efectivo';
       document.getElementById('clienteInput').value = '';
@@ -814,32 +857,204 @@ function copyQuoteWhatsApp() {
   const msg = `🎄 *Cotización Alexander — Dulce Navidad*\nCliente: ${cli}\n\n${linesTxt}\n\nSubtotal: ${fmt(sub)}${adjTxt}\n*Total: ${fmt(tot)}*`;
   navigator.clipboard?.writeText(msg).then(() => toast('Cotización copiada para WhatsApp')).catch(() => alert(msg));
 }
+function parseQuoteItems(q) {
+  if (q.itemsJson) {
+    try {
+      const arr = JSON.parse(q.itemsJson);
+      if (Array.isArray(arr) && arr.length) return arr;
+    } catch (e) {}
+  }
+  const out = [];
+  String(q.propuesta || '').split('+').forEach(part => {
+    const m = part.trim().match(/^(\d+)\s*x\s+(.+)$/i);
+    if (!m) return;
+    const qty = Number(m[1]) || 1;
+    const txt = m[2].trim().toLowerCase();
+    const p = CATALOG.find(c => txt.includes(c.presentacion.toLowerCase()) && txt.includes(c.sabor.toLowerCase()))
+      || CATALOG.find(c => (c.presentacion + ' ' + c.sabor).toLowerCase() === txt);
+    if (p) {
+      const inv = state.inventory.find(i => i.sku === p.sku);
+      const unit = inv ? inv.precio : p.precio;
+      out.push({ sku: p.sku, label: p.presentacion + ' ' + p.sabor, qty, unit, sub: qty * unit });
+    }
+  });
+  return out;
+}
+
 async function submitQuote() {
   const cli = document.getElementById('qCliente').value.trim();
+  const wa = document.getElementById('qWhatsapp').value.trim();
   if (!cli || !quoteLines.length) return toast('Falta cliente o productos');
+  const btn = document.getElementById('qSaveBtn');
+  btn.disabled = true; btn.textContent = 'Generando PDF...';
   const { sub, adj, tot, units } = calcQuoteTotals();
   const propuesta = quoteLines.map(l => `${l.qty}x ${l.label}`).join(' + ');
-  const res = await apiPost({
-    action: 'addQuote', cliente: cli, propuesta, unidades: units,
-    subtotal: sub, ajuste: adj, total: tot, entrega: document.getElementById('qEntrega').value
+  const isEdit = !!editingQuoteRow;
+  try {
+    const res = await apiPost({
+      action: isEdit ? 'updateQuote' : 'addQuote',
+      row: editingQuoteRow || undefined,
+      cliente: cli, whatsapp: wa, propuesta, items: quoteLines, unidades: units,
+      subtotal: sub, ajuste: adj, total: tot, entrega: document.getElementById('qEntrega').value
+    });
+    if (res.ok) {
+      toast(isEdit ? 'Cotización actualizada' : 'Cotización guardada con PDF');
+      cancelEditQuote();
+      await loadData();
+      const savedQ = (state.quotes || []).find(q => q.row === res.row);
+      if (savedQ) openQuoteActionModal(savedQ.row);
+    } else toast(res.error || 'Error');
+  } catch (e) { toast('Error de red'); }
+  btn.disabled = false;
+  btn.textContent = editingQuoteRow ? 'Guardar cambios' : 'Guardar y generar PDF';
+}
+
+function openQuoteActionModal(row) {
+  const q = (state.quotes || []).find(x => x.row === row);
+  if (!q) return;
+  activeQuote = q;
+  document.getElementById('qaCliente').textContent = q.cliente || 'Cliente';
+  document.getElementById('qaMeta').textContent = `${q.fecha}${q.entrega ? ' · Entrega: ' + q.entrega : ''} · ${q.estado}`;
+  const adjInfo = q.ajuste ? `<div style="font-size:12px;color:var(--muted);margin-top:4px;">Subtotal: ${fmt(q.subtotal)} · Ajuste: ${fmt(q.ajuste)}</div>` : '';
+  document.getElementById('qaPropuesta').innerHTML = `<div>${q.propuesta}</div>${adjInfo}<div style="font-size:16px;font-weight:800;color:var(--green);margin-top:6px;">Total: ${fmt(q.total)}</div>`;
+  document.getElementById('qaWhatsapp').value = q.whatsapp || '';
+  document.getElementById('quoteActionModal').classList.remove('hidden');
+}
+function closeQuoteActionModal() { document.getElementById('quoteActionModal').classList.add('hidden'); }
+
+async function ensureQuotePdf(waOverride) {
+  if (!activeQuote) return null;
+  if (activeQuote.pdfUrl && !waOverride) return activeQuote.pdfUrl;
+  toast('Generando PDF de cotización...');
+  const res = await apiPost({ action: 'generateQuotePdf', row: activeQuote.row, whatsapp: waOverride || activeQuote.whatsapp || '' });
+  if (res.ok && res.pdfUrl) {
+    activeQuote.pdfUrl = res.pdfUrl;
+    if (waOverride) activeQuote.whatsapp = waOverride;
+    return res.pdfUrl;
+  }
+  toast(res.error || 'No se pudo generar el PDF');
+  return null;
+}
+
+async function sendQuotePdfWhatsApp() {
+  if (!activeQuote) return;
+  const waRaw = document.getElementById('qaWhatsapp').value.trim();
+  const waNum = formatWaPhone(waRaw);
+  if (!waNum) return toast('Ingresa un número de WhatsApp arriba');
+  const btn = document.getElementById('qaWaBtn');
+  btn.disabled = true; btn.textContent = 'Preparando PDF...';
+  const pdfUrl = await ensureQuotePdf(waRaw);
+  btn.disabled = false; btn.textContent = '📲 Enviar Cotización PDF por WhatsApp';
+  if (!pdfUrl) return;
+  const msg = `🎄✨ *Cotización Alexander — Dulce Navidad*\nHola ${activeQuote.cliente}, aquí tienes tu cotización por *${fmt(activeQuote.total)}*:\n\n📄 Ver Cotización PDF: ${pdfUrl}\n\nCon cariño,\nGloria & Ana ❤️`;
+  window.open(`https://wa.me/${waNum}?text=${encodeURIComponent(msg)}`, '_blank');
+  await loadData();
+}
+
+async function viewQuotePdf() {
+  if (!activeQuote) return;
+  const btn = document.getElementById('qaPdfBtn');
+  btn.disabled = true; btn.textContent = 'Abriendo PDF...';
+  const pdfUrl = await ensureQuotePdf(document.getElementById('qaWhatsapp').value.trim());
+  btn.disabled = false; btn.textContent = '📄 Ver / Generar Cotización PDF';
+  if (pdfUrl) window.open(pdfUrl, '_blank');
+}
+
+function startEditQuote() {
+  if (!activeQuote) return;
+  const q = activeQuote;
+  editingQuoteRow = q.row;
+  document.getElementById('qFormTitle').textContent = 'Editando Cotización — ' + q.cliente;
+  document.getElementById('qCancelEditBtn').classList.remove('hidden');
+  document.getElementById('qSaveBtn').textContent = 'Guardar cambios';
+  document.getElementById('qCliente').value = q.cliente || '';
+  document.getElementById('qWhatsapp').value = q.whatsapp || '';
+  document.getElementById('qEntrega').value = (q.entrega || '').slice(0, 10);
+  const items = parseQuoteItems(q);
+  quoteLines = items.map(it => ({ sku: it.sku, label: it.label, qty: Number(it.qty) || 1, unit: Number(it.unit) || 0, sub: (Number(it.qty) || 1) * (Number(it.unit) || 0) }));
+  const ratio = q.subtotal > 0 ? (q.ajuste / q.subtotal) : 0;
+  document.getElementById('qAjuste').value = ratio <= -0.09 ? 'desc10' : ratio <= -0.04 ? 'desc5' : ratio >= 0.15 ? 'itbis' : 'none';
+  renderQuotePreview();
+  closeQuoteActionModal();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  toast('Editando cotización: ajusta y guarda');
+}
+
+function cancelEditQuote() {
+  editingQuoteRow = null;
+  quoteLines = [];
+  document.getElementById('qFormTitle').textContent = 'Nueva Cotización';
+  document.getElementById('qCancelEditBtn').classList.add('hidden');
+  document.getElementById('qSaveBtn').textContent = 'Guardar y generar PDF';
+  document.getElementById('qCliente').value = '';
+  document.getElementById('qWhatsapp').value = '';
+  document.getElementById('qEntrega').value = '';
+  document.getElementById('qAjuste').value = 'none';
+  renderQuotePreview();
+}
+
+function convertQuoteToSale() {
+  if (!activeQuote) return;
+  const items = parseQuoteItems(activeQuote);
+  if (!items.length) return toast('No se pudieron leer los productos de esta cotización');
+  cart = items.map(it => {
+    const p = CATALOG.find(c => c.sku === it.sku);
+    return {
+      sku: it.sku,
+      presentacion: p ? p.presentacion : it.label,
+      sabor: p ? p.sabor : '',
+      cantidad: Number(it.qty) || 1,
+      precioUnit: Number(it.unit) || (p ? p.precio : 0)
+    };
   });
-  if (res.ok) {
-    toast('Cotización guardada');
-    quoteLines = []; document.getElementById('qCliente').value = '';
-    renderQuotePreview(); await loadData();
-  } else toast(res.error || 'Error');
+  convertingQuoteRow = activeQuote.row;
+  document.getElementById('clienteInput').value = activeQuote.cliente || '';
+  document.getElementById('whatsappInput').value = document.getElementById('qaWhatsapp').value.trim() || activeQuote.whatsapp || '';
+  closeQuoteActionModal();
+  renderProductGrid();
+  renderCartBar();
+  openCheckoutModal();
+  toast('Pedido cargado: elige método de pago y cobra');
+}
+
+async function closeQuoteNoInterest() {
+  if (!activeQuote) return;
+  if (!confirm(`¿Marcar la cotización de ${activeQuote.cliente} como "Cerrada · No interesó"?`)) return;
+  const res = await apiPost({ action: 'setQuoteStatus', row: activeQuote.row, estado: 'Cerrada · No interesó', accion: 'Cerrada sin venta' });
+  closeQuoteActionModal();
+  if (res.ok) { toast('Cotización cerrada'); await loadData(); } else toast(res.error || 'Error');
+}
+
+async function deleteQuoteAction() {
+  if (!activeQuote) return;
+  if (!confirm(`¿Borrar permanentemente la cotización de ${activeQuote.cliente} (${fmt(activeQuote.total)})?`)) return;
+  const res = await apiPost({ action: 'deleteQuote', row: activeQuote.row });
+  closeQuoteActionModal();
+  if (res.ok) { toast('Cotización borrada'); await loadData(); } else toast(res.error || 'Error');
 }
 
 async function submitCashMove() {
   const monto = Number(document.getElementById('cajaMonto').value);
   const concepto = document.getElementById('cajaConcepto').value.trim();
   if (!monto || !concepto) return toast('Falta monto o concepto');
-  const res = await apiPost({ action: 'addCashMove', tipo: document.getElementById('cajaTipo').value, monto, concepto });
-  if (res.ok) {
-    toast('Movimiento guardado');
-    document.getElementById('cajaMonto').value = ''; document.getElementById('cajaConcepto').value = '';
-    await loadData();
-  } else toast(res.error || 'Error');
+  const btn = document.getElementById('cashSaveBtn');
+  btn.disabled = true; btn.textContent = 'Guardando...';
+  try {
+    const res = await apiPost({
+      action: 'addCashMove', tipo: document.getElementById('cajaTipo').value, monto, concepto,
+      receiptBase64: form.cashPhoto || '', receiptMime: 'image/jpeg'
+    });
+    if (res.ok) {
+      toast('Movimiento guardado');
+      form.cashPhoto = '';
+      document.getElementById('cajaMonto').value = '';
+      document.getElementById('cajaConcepto').value = '';
+      document.getElementById('cashReceiptInput').value = '';
+      document.getElementById('cashPreview').style.display = 'none';
+      await loadData();
+    } else toast(res.error || 'Error');
+  } catch (e) { toast('Error de red'); }
+  btn.disabled = false; btn.textContent = 'Guardar movimiento';
 }
 
 function openConfirmModal(source, row, desc, saleId) {
@@ -914,11 +1129,22 @@ function renderAll() {
     </div>`;
   }).join('') || '<small style="color:var(--muted)">Sin ventas aún</small>';
 
-  document.getElementById('quotesList').innerHTML = (state.quotes || []).map(q => `
-    <div class="item">
-      <div><strong>${q.cliente}</strong><div style="font-size:12px;color:var(--muted)">${q.propuesta} · ${q.fecha}</div></div>
-      <div style="text-align:right"><strong>${fmt(q.total)}</strong><br><span class="badge b-warn">${q.estado}</span></div>
-    </div>`).join('') || '<small style="color:var(--muted)">Sin cotizaciones aún</small>';
+  document.getElementById('quotesList').innerHTML = (state.quotes || []).map(q => {
+    const isSold = String(q.estado).includes('Vendida');
+    const isClosed = String(q.estado).includes('No interesó');
+    const bCls = isSold ? 'b-ok' : isClosed ? 'st-bad' : 'b-warn';
+    return `
+    <div class="item" style="cursor:pointer;" onclick="openQuoteActionModal(${q.row})">
+      <div>
+        <strong>${q.cliente}</strong>
+        <div style="font-size:12px;color:var(--muted)">${q.propuesta} · ${q.fecha}</div>
+      </div>
+      <div style="text-align:right;white-space:nowrap;">
+        <strong>${fmt(q.total)}</strong><br>
+        <span class="badge ${bCls}">${q.estado}</span> <span style="color:var(--muted);font-weight:700;">›</span>
+      </div>
+    </div>`;
+  }).join('') || '<small style="color:var(--muted)">Sin cotizaciones aún</small>';
 
   document.getElementById('pendingSmnList').innerHTML = grouped.filter(g => g.estado === 'Por confirmar').map(g => {
     const sumDesc = g.items.map(it => `${it.cantidad}x ${it.presentacion}`).join(' + ');
@@ -936,9 +1162,12 @@ function renderAll() {
     </div>`).join('') || '<small style="color:var(--muted)">Sin facturas pendientes</small>';
 
   document.getElementById('cajaTotal').textContent = fmt(state.summary['Efectivo Actual en Caja Chica']);
-  document.getElementById('cashMovesList').innerHTML = state.cashMoves.slice(0, 12).map(m => `
+  document.getElementById('cashMovesList').innerHTML = state.cashMoves.slice(0, 15).map(m => `
     <div class="item">
-      <div><strong>${m.tipo}</strong><div style="font-size:12px;color:var(--muted)">${m.concepto} · ${m.fecha}</div></div>
+      <div>
+        <strong>${m.tipo}</strong>
+        <div style="font-size:12px;color:var(--muted)">${m.concepto} · ${m.fecha} ${m.comprobante ? '· <a href="'+m.comprobante+'" target="_blank">📎 Ver factura</a>' : ''}</div>
+      </div>
       <strong>${fmt(m.monto)}</strong>
     </div>`).join('') || '<small style="color:var(--muted)">Sin movimientos aún</small>';
 
