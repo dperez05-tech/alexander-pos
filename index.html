@@ -416,10 +416,10 @@ const CATALOG = [
   { sku: 'ALEX-700-TRAD', presentacion: '700 ml',           sabor: 'Tradicional', precio: 1600, img: './assets/700-trad.jpg' },
   { sku: 'ALEX-700-AVEL', presentacion: '700 ml',           sabor: 'Avellana',    precio: 1600, img: './assets/700-avel.jpg' },
   { sku: 'ALEX-700-PIST', presentacion: '700 ml',           sabor: 'Pistacho',    precio: 1600, img: './assets/700-pist.jpg' },
-  { sku: 'ALEX-CAJ3-MIX', presentacion: 'Cajita 3 sabores', sabor: 'Pistacho, Avellana, Tradicional', precio: 700, img: './assets/caj-3-sabores.jpg', sub: 'Pistacho, Avellana y Tradicional' },
-  { sku: 'ALEX-CAJ2-TP',  presentacion: 'Cajita 2 sabores', sabor: 'Tradicional y Pistacho',          precio: 600, img: './assets/caj-2-trad-pist.jpg', sub: 'Tradicional y Pistacho' },
-  { sku: 'ALEX-CAJ2-TA',  presentacion: 'Cajita 2 sabores', sabor: 'Tradicional y Avellana',          precio: 600, img: './assets/caj-2-trad-avel.jpg', sub: 'Tradicional y Avellana' },
-  { sku: 'ALEX-CAJ2-PA',  presentacion: 'Cajita 2 sabores', sabor: 'Pistacho y Avellana',             precio: 600, img: './assets/caj-2-pist-avel.jpg', sub: 'Pistacho y Avellana' }
+  { sku: 'ALEX-CAJ3-MIX', presentacion: 'Cajita 3 sabores', sabor: 'Pistacho, Avellana, Tradicional', precio: 700, img: './assets/caj-3-sabores.jpg', sub: 'Pistacho, Avellana y Tradicional', noAlert: true },
+  { sku: 'ALEX-CAJ2-TP',  presentacion: 'Cajita 2 sabores', sabor: 'Tradicional y Pistacho',          precio: 600, img: './assets/caj-2-trad-pist.jpg', sub: 'Tradicional y Pistacho', noAlert: true },
+  { sku: 'ALEX-CAJ2-TA',  presentacion: 'Cajita 2 sabores', sabor: 'Tradicional y Avellana',          precio: 600, img: './assets/caj-2-trad-avel.jpg', sub: 'Tradicional y Avellana', noAlert: true },
+  { sku: 'ALEX-CAJ2-PA',  presentacion: 'Cajita 2 sabores', sabor: 'Pistacho y Avellana',             precio: 600, img: './assets/caj-2-pist-avel.jpg', sub: 'Pistacho y Avellana', noAlert: true }
 ];
 
 localStorage.removeItem('alex_pin');
@@ -480,12 +480,12 @@ function goTab(id, btn) {
 }
 
 const LOW_STOCK_LIMIT = 5;
-function stockMeta(stock) {
+function stockMeta(stock, noAlert) {
   const n = Number(stock);
   if (isNaN(n)) return { cls: 'st-ok', badge: '—', banner: 'Sincronizando stock...' };
-  if (n <= 0) return { cls: 'st-bad', badge: 'Agotado', banner: '🔴 Stock en 0 (carga en 📦 Stock si tienes físicas)' };
-  if (n <= LOW_STOCK_LIMIT) return { cls: 'st-warn', badge: '⚠️ ' + n, banner: `⚠️ Quedan solo ${n} botella${n===1?'':'s'} — reponer pronto` };
-  return { cls: 'st-ok', badge: `${n} disp.`, banner: `✅ ${n} botellas disponibles` };
+  if (n <= 0) return { cls: 'st-bad', badge: 'Agotado', banner: noAlert ? '🔴 Edición limitada agotada' : '🔴 Stock en 0 (carga en 📦 Stock si tienes físicas)' };
+  if (!noAlert && n <= LOW_STOCK_LIMIT) return { cls: 'st-warn', badge: '⚠️ ' + n, banner: `⚠️ Quedan solo ${n} botella${n===1?'':'s'} — reponer pronto` };
+  return { cls: 'st-ok', badge: `${n} disp.`, banner: noAlert ? `✨ ${n} disponible${n===1?'':'s'} (edición limitada)` : `✅ ${n} botellas disponibles` };
 }
 
 function renderProductGrid() {
@@ -493,7 +493,7 @@ function renderProductGrid() {
     const inv = state.inventory.find(i => i.sku === p.sku);
     const price = inv ? inv.precio : p.precio;
     const stock = inv ? inv.stockActual : null;
-    const m = stockMeta(stock);
+    const m = stockMeta(stock, !!p.noAlert);
     const emptyCls = (stock !== null && stock <= 0) ? 'is-empty' : '';
     return `
       <button type="button" class="prod-card ${emptyCls}" onclick="openSaleModal('${p.sku}')">
@@ -511,9 +511,10 @@ function renderProductGrid() {
 }
 
 function updateModalBanner() {
+  const p = CATALOG.find(x => x.presentacion === form.presentacion && x.sabor === form.sabor);
   const inv = state.inventory.find(i => i.presentacion === form.presentacion && i.sabor === form.sabor);
   const stock = inv ? inv.stockActual : null;
-  const m = stockMeta(stock);
+  const m = stockMeta(stock, !!(p && p.noAlert));
   const el = document.getElementById('mStockBanner');
   el.className = 'stock-banner ' + m.cls;
   if (stock !== null && stock > 0 && form.qty > stock) {
