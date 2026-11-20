@@ -476,10 +476,12 @@
     </div>
     <div id="qaPropuesta" style="background:#FFFDF8;border:1px solid var(--border);border-radius:12px;padding:10px 12px;font-size:13px;margin-bottom:12px;"></div>
 
-    <input id="qaWhatsapp" type="tel" inputmode="tel" placeholder="📱 WhatsApp del cliente (ej. 8095551234)">
+    <input id="qaWhatsapp" type="tel" inputmode="tel" placeholder="📱 WhatsApp del cliente (ej. 8095551234)" oninput="refreshQuoteWaLinks()">
 
-    <button type="button" id="qaWaBtn" class="btn-primary" style="background:#128C7E;margin-bottom:8px;" onclick="sendQuotePdfWhatsApp()">📲 Enviar Cotización PDF por WhatsApp</button>
-    <button type="button" id="qaPdfBtn" class="btn-outline" style="width:100%;margin-bottom:8px;" onclick="viewQuotePdf()">📄 Ver / Generar Cotización PDF</button>
+    <a id="qaWaLink" href="#" target="_blank" class="btn-primary hidden" style="display:block;text-align:center;text-decoration:none;background:#128C7E;margin-bottom:8px;">📲 Enviar Cotización PDF por WhatsApp</a>
+    <button type="button" id="qaWaBtn" class="btn-primary" style="background:#128C7E;margin-bottom:8px;" onclick="sendQuotePdfWhatsApp()">📲 Generar PDF y Enviar por WhatsApp</button>
+    <a id="qaPdfLink" href="#" target="_blank" class="btn-outline hidden" style="display:block;text-align:center;text-decoration:none;margin-bottom:8px;">📄 Ver Cotización PDF</a>
+    <button type="button" id="qaPdfBtn" class="btn-outline" style="width:100%;margin-bottom:8px;" onclick="viewQuotePdf()">📄 Generar Cotización PDF</button>
     <button type="button" class="btn-primary" style="margin-bottom:8px;" onclick="convertQuoteToSale()">✅ Convertir en venta</button>
     <div class="row2" style="margin-bottom:8px;">
       <button type="button" class="btn-outline" onclick="startEditQuote()">✏️ Modificar</button>
@@ -909,6 +911,37 @@ async function submitQuote() {
   btn.textContent = editingQuoteRow ? 'Guardar cambios' : 'Guardar y generar PDF';
 }
 
+function refreshQuoteWaLinks() {
+  if (!activeQuote) return;
+  const waRaw = document.getElementById('qaWhatsapp').value.trim();
+  const waNum = formatWaPhone(waRaw);
+  const hasPdf = !!activeQuote.pdfUrl;
+  const waLink = document.getElementById('qaWaLink');
+  const waBtn = document.getElementById('qaWaBtn');
+  const pdfLink = document.getElementById('qaPdfLink');
+  const pdfBtn = document.getElementById('qaPdfBtn');
+
+  if (hasPdf) {
+    pdfLink.href = activeQuote.pdfUrl;
+    pdfLink.classList.remove('hidden');
+    pdfBtn.classList.add('hidden');
+  } else {
+    pdfLink.classList.add('hidden');
+    pdfBtn.classList.remove('hidden');
+  }
+
+  if (hasPdf && waNum) {
+    const msg = `🎄✨ *Cotización Alexander — Dulce Navidad*\nHola ${activeQuote.cliente}, aquí tienes tu cotización por *${fmt(activeQuote.total)}*:\n\n📄 Ver Cotización PDF: ${activeQuote.pdfUrl}\n\nCon cariño,\nGloria & Ana ❤️`;
+    waLink.href = `https://wa.me/${waNum}?text=${encodeURIComponent(msg)}`;
+    waLink.classList.remove('hidden');
+    waBtn.classList.add('hidden');
+  } else {
+    waLink.classList.add('hidden');
+    waBtn.classList.remove('hidden');
+    waBtn.textContent = hasPdf ? '📲 Ingresa WhatsApp arriba para enviar' : '📲 Generar PDF y Enviar por WhatsApp';
+  }
+}
+
 function openQuoteActionModal(row) {
   const q = (state.quotes || []).find(x => x.row === row);
   if (!q) return;
@@ -918,18 +951,20 @@ function openQuoteActionModal(row) {
   const adjInfo = q.ajuste ? `<div style="font-size:12px;color:var(--muted);margin-top:4px;">Subtotal: ${fmt(q.subtotal)} · Ajuste: ${fmt(q.ajuste)}</div>` : '';
   document.getElementById('qaPropuesta').innerHTML = `<div>${q.propuesta}</div>${adjInfo}<div style="font-size:16px;font-weight:800;color:var(--green);margin-top:6px;">Total: ${fmt(q.total)}</div>`;
   document.getElementById('qaWhatsapp').value = q.whatsapp || '';
+  refreshQuoteWaLinks();
   document.getElementById('quoteActionModal').classList.remove('hidden');
 }
 function closeQuoteActionModal() { document.getElementById('quoteActionModal').classList.add('hidden'); }
 
 async function ensureQuotePdf(waOverride) {
   if (!activeQuote) return null;
-  if (activeQuote.pdfUrl && !waOverride) return activeQuote.pdfUrl;
+  if (activeQuote.pdfUrl) return activeQuote.pdfUrl;
   toast('Generando PDF de cotización...');
   const res = await apiPost({ action: 'generateQuotePdf', row: activeQuote.row, whatsapp: waOverride || activeQuote.whatsapp || '' });
   if (res.ok && res.pdfUrl) {
     activeQuote.pdfUrl = res.pdfUrl;
     if (waOverride) activeQuote.whatsapp = waOverride;
+    refreshQuoteWaLinks();
     return res.pdfUrl;
   }
   toast(res.error || 'No se pudo generar el PDF');
@@ -940,24 +975,29 @@ async function sendQuotePdfWhatsApp() {
   if (!activeQuote) return;
   const waRaw = document.getElementById('qaWhatsapp').value.trim();
   const waNum = formatWaPhone(waRaw);
-  if (!waNum) return toast('Ingresa un número de WhatsApp arriba');
+  if (!waNum) {
+    document.getElementById('qaWhatsapp').focus();
+    return toast('Ingresa el número de WhatsApp arriba');
+  }
   const btn = document.getElementById('qaWaBtn');
-  btn.disabled = true; btn.textContent = 'Preparando PDF...';
+  btn.disabled = true; btn.textContent = 'Generando PDF...';
   const pdfUrl = await ensureQuotePdf(waRaw);
-  btn.disabled = false; btn.textContent = '📲 Enviar Cotización PDF por WhatsApp';
-  if (!pdfUrl) return;
-  const msg = `🎄✨ *Cotización Alexander — Dulce Navidad*\nHola ${activeQuote.cliente}, aquí tienes tu cotización por *${fmt(activeQuote.total)}*:\n\n📄 Ver Cotización PDF: ${pdfUrl}\n\nCon cariño,\nGloria & Ana ❤️`;
-  window.open(`https://wa.me/${waNum}?text=${encodeURIComponent(msg)}`, '_blank');
-  await loadData();
+  btn.disabled = false;
+  refreshQuoteWaLinks();
+  if (pdfUrl) {
+    toast('PDF listo — toca Enviar por WhatsApp');
+    loadData();
+  }
 }
 
 async function viewQuotePdf() {
   if (!activeQuote) return;
   const btn = document.getElementById('qaPdfBtn');
-  btn.disabled = true; btn.textContent = 'Abriendo PDF...';
+  btn.disabled = true; btn.textContent = 'Generando PDF...';
   const pdfUrl = await ensureQuotePdf(document.getElementById('qaWhatsapp').value.trim());
-  btn.disabled = false; btn.textContent = '📄 Ver / Generar Cotización PDF';
-  if (pdfUrl) window.open(pdfUrl, '_blank');
+  btn.disabled = false;
+  refreshQuoteWaLinks();
+  if (pdfUrl) toast('PDF listo — toca Ver Cotización PDF');
 }
 
 function startEditQuote() {
