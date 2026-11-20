@@ -114,6 +114,10 @@
       background: #fff; color: var(--green); border: 1.5px solid var(--green);
       border-radius: 12px; padding: 12px; font-size: 14px; font-weight: 600; cursor: pointer;
     }
+    .btn-undo {
+      margin-top: 5px; background: #FFF5F5; color: #B42318; border: 1px solid #FECDCA;
+      border-radius: 8px; padding: 4px 8px; font-size: 11px; font-weight: 700; cursor: pointer;
+    }
     nav {
       position: fixed; bottom: 0; left: 0; right: 0; background: #fff;
       border-top: 1px solid var(--border); display: grid; grid-template-columns: repeat(5, 1fr);
@@ -207,8 +211,8 @@
           <option value="ALEX-LIC-AVEL">Licorera · Avellana (RD$1,500)</option>
           <option value="ALEX-LIC-PIST">Licorera · Pistacho (RD$1,500)</option>
           <option value="ALEX-700-TRAD">700 ml · Tradicional (RD$1,600)</option>
-          <option value="ALEX-700-AVEL">700 ml · Avellana (RD$1,650)</option>
-          <option value="ALEX-700-PIST">700 ml · Pistacho (RD$1,650)</option>
+          <option value="ALEX-700-AVEL">700 ml · Avellana (RD$1,600)</option>
+          <option value="ALEX-700-PIST">700 ml · Pistacho (RD$1,600)</option>
         </select>
         <input id="qQty" type="number" inputmode="numeric" value="1" min="1" placeholder="Cant.">
       </div>
@@ -406,8 +410,8 @@ const CATALOG = [
   { sku: 'ALEX-LIC-AVEL', presentacion: 'Licorera 16.9 oz', sabor: 'Avellana',    precio: 1500, img: './assets/lic-avel.jpg' },
   { sku: 'ALEX-LIC-PIST', presentacion: 'Licorera 16.9 oz', sabor: 'Pistacho',    precio: 1500, img: './assets/lic-pist.jpg' },
   { sku: 'ALEX-700-TRAD', presentacion: '700 ml',           sabor: 'Tradicional', precio: 1600, img: './assets/700-trad.jpg' },
-  { sku: 'ALEX-700-AVEL', presentacion: '700 ml',           sabor: 'Avellana',    precio: 1650, img: './assets/700-avel.jpg' },
-  { sku: 'ALEX-700-PIST', presentacion: '700 ml',           sabor: 'Pistacho',    precio: 1650, img: './assets/700-pist.jpg' }
+  { sku: 'ALEX-700-AVEL', presentacion: '700 ml',           sabor: 'Avellana',    precio: 1600, img: './assets/700-avel.jpg' },
+  { sku: 'ALEX-700-PIST', presentacion: '700 ml',           sabor: 'Pistacho',    precio: 1600, img: './assets/700-pist.jpg' }
 ];
 
 localStorage.removeItem('alex_pin');
@@ -694,9 +698,21 @@ async function addStockPrompt(row, label) {
   if (res.ok) { toast('Stock actualizado'); await loadData(); }
 }
 
+async function undoSale(id) {
+  const s = state.sales.find(x => x.id === id);
+  const label = s ? `${s.cantidad}x ${s.presentacion} ${s.sabor} (${fmt(s.total)})` : id;
+  if (!confirm(`¿Deshacer esta venta?\n\n${label}\n\nSe restaurará el inventario y se ajustará la caja.`)) return;
+  toast('Deshaciendo venta...');
+  try {
+    const res = await apiPost({ action: 'deleteSale', id });
+    if (res.ok) { toast('Venta deshecha y stock restaurado'); await loadData(); }
+    else toast(res.error || 'No se pudo deshacer');
+  } catch (e) { toast('Error de red al deshacer'); }
+}
+
 function renderAll() {
   renderProductGrid();
-  document.getElementById('recentSalesList').innerHTML = state.sales.slice(0, 10).map(s => `
+  document.getElementById('recentSalesList').innerHTML = state.sales.slice(0, 15).map(s => `
     <div class="item">
       <div>
         <strong>${s.cantidad}x ${s.presentacion} · ${s.sabor}</strong>
@@ -704,7 +720,8 @@ function renderAll() {
       </div>
       <div style="text-align:right">
         <strong>${fmt(s.total)}</strong><br>
-        <span class="badge ${s.estado==='Cobrado'?'b-ok':'b-warn'}">${s.estado}</span>
+        <span class="badge ${s.estado==='Cobrado'?'b-ok':'b-warn'}">${s.estado}</span><br>
+        <button type="button" class="btn-undo" onclick="undoSale('${String(s.id).replace(/'/g, '')}')">↩ Deshacer</button>
       </div>
     </div>`).join('') || '<small style="color:var(--muted)">Sin ventas aún</small>';
 
