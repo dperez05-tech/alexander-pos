@@ -1115,11 +1115,17 @@ async function submitConfirmPayment() {
   if (res.ok) { toast('Cobro confirmado'); await loadData(); } else toast(res.error || 'Error');
 }
 
-async function addStockPrompt(row, label) {
-  const val = prompt('¿Cuántas botellas sumas a ' + label + '?', '6');
+async function adjustStockPrompt(row, label, sign, currentStock) {
+  const isSub = sign < 0;
+  const val = prompt(isSub ? `¿Cuántas unidades restas a ${label}? (actual: ${currentStock})` : `¿Cuántas unidades sumas a ${label}? (actual: ${currentStock})`, '1');
   if (!val || isNaN(val)) return;
-  const res = await apiPost({ action: 'addStock', row, cantidad: Number(val), mode: 'add' });
-  if (res.ok) { toast('Stock actualizado'); await loadData(); }
+  const qty = Math.abs(Number(val));
+  if (!qty) return;
+  const delta = isSub ? -Math.min(qty, Math.max(0, Number(currentStock) || 0)) : qty;
+  if (!delta) return toast('El stock ya está en 0');
+  const res = await apiPost({ action: 'addStock', row, cantidad: delta, mode: 'add' });
+  if (res.ok) { toast(isSub ? `Restado (-${Math.abs(delta)})` : `Sumado (+${delta})`); await loadData(); }
+  else toast(res.error || 'Error al ajustar stock');
 }
 
 function groupSales(salesArr) {
@@ -1216,10 +1222,11 @@ function renderAll() {
 
   document.getElementById('inventoryList').innerHTML = state.inventory.map(i => `
     <div class="item">
-      <div><strong>${i.presentacion} · ${i.sabor}</strong><div style="font-size:12px;color:var(--muted)">${fmt(i.precio)} · ${i.estado}</div></div>
-      <div style="display:flex;align-items:center;gap:8px;">
-        <strong>${i.stockActual}</strong>
-        <button class="btn-outline" style="padding:7px 11px;font-size:13px;" onclick="addStockPrompt(${i.row}, '${i.presentacion} ${i.sabor}')">+ Stock</button>
+      <div style="flex:1;min-width:0;"><strong>${i.presentacion} · ${i.sabor}</strong><div style="font-size:12px;color:var(--muted)">${fmt(i.precio)} · ${i.estado}</div></div>
+      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
+        <button class="btn-outline" style="width:36px;height:36px;padding:0;font-size:18px;font-weight:800;border-color:#B42318;color:#B42318;background:#FFF5F5;" onclick="adjustStockPrompt(${i.row}, '${String(i.presentacion + ' ' + i.sabor).replace(/'/g, '')}', -1, ${i.stockActual})">−</button>
+        <strong style="min-width:26px;text-align:center;font-size:16px;">${i.stockActual}</strong>
+        <button class="btn-outline" style="width:36px;height:36px;padding:0;font-size:18px;font-weight:800;" onclick="adjustStockPrompt(${i.row}, '${String(i.presentacion + ' ' + i.sabor).replace(/'/g, '')}', 1, ${i.stockActual})">+</button>
       </div>
     </div>`).join('');
 }
