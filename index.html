@@ -118,6 +118,33 @@
       margin-top: 5px; background: #FFF5F5; color: #B42318; border: 1px solid #FECDCA;
       border-radius: 8px; padding: 4px 8px; font-size: 11px; font-weight: 700; cursor: pointer;
     }
+    .prod-cart-badge {
+      position: absolute; top: 8px; left: 8px;
+      background: var(--gold); color: #1E2421; padding: 4px 8px; border-radius: 99px;
+      font-size: 11px; font-weight: 800; box-shadow: 0 2px 6px rgba(0,0,0,.18);
+    }
+    .cart-bar {
+      position: fixed; left: 12px; right: 12px; max-width: 516px; margin: 0 auto;
+      bottom: calc(68px + env(safe-area-inset-bottom)); z-index: 40;
+      background: var(--green); color: #FAF6EE; border: 1.5px solid var(--gold);
+      border-radius: 16px; padding: 10px 12px 10px 14px;
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      box-shadow: 0 8px 24px rgba(17,38,28,.32);
+    }
+    .cart-bar-btn {
+      background: var(--gold); color: #1E2421; border: none; border-radius: 11px;
+      padding: 10px 14px; font-size: 14px; font-weight: 800; cursor: pointer; white-space: nowrap;
+    }
+    .cart-line {
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      padding: 8px 0; border-bottom: 1px solid var(--border);
+    }
+    .cart-line:last-child { border-bottom: none; }
+    .cart-qty-btn {
+      width: 28px; height: 28px; border-radius: 8px; border: 1px solid var(--border);
+      background: #fff; font-weight: 700; color: var(--green); cursor: pointer; font-size: 15px;
+    }
+    body.has-cart { padding-bottom: calc(144px + env(safe-area-inset-bottom)); }
     nav {
       position: fixed; bottom: 0; left: 0; right: 0; background: #fff;
       border-top: 1px solid var(--border); display: grid; grid-template-columns: repeat(5, 1fr);
@@ -191,7 +218,7 @@
 <main>
   <!-- TAB 1: VENDER -->
   <section id="tab-vender">
-    <span class="label">Toca una botella para registrar venta</span>
+    <span class="label">Toca los productos para armar el pedido</span>
     <div id="productGrid" class="prod-grid"></div>
 
     <div class="card">
@@ -309,7 +336,16 @@
   </section>
 </main>
 
-<!-- Modal VENTA RÁPIDA -->
+<!-- Barra flotante del carrito -->
+<div id="cartBar" class="cart-bar hidden">
+  <div onclick="openCheckoutModal()" style="cursor:pointer;flex:1;">
+    <div id="cartBarCount" style="font-size:12px;color:#D8E2DC;font-weight:600;">🛒 0 artículos</div>
+    <div id="cartBarTotal" style="font-size:17px;font-weight:800;color:#FAF6EE;">RD$0</div>
+  </div>
+  <button type="button" class="cart-bar-btn" onclick="openCheckoutModal()">Completar venta →</button>
+</div>
+
+<!-- Modal AGREGAR PRODUCTO -->
 <div id="saleModal" class="modal-bg hidden" onclick="if(event.target===this)closeSaleModal()">
   <div class="modal">
     <div class="modal-prod">
@@ -333,9 +369,27 @@
       </div>
       <div>
         <span class="label">Precio Unit. (RD$)</span>
-        <input id="priceInput" type="number" inputmode="numeric" value="1500" oninput="updateTotal()">
+        <input id="priceInput" type="number" inputmode="numeric" value="1500" oninput="updatePickTotal()">
       </div>
     </div>
+
+    <div class="row2" style="margin-top:4px;">
+      <button type="button" class="btn-outline" onclick="addCurrentToCart(false)">+ Agregar al carrito</button>
+      <button type="button" id="pickGoBtn" class="btn-primary" onclick="addCurrentToCart(true)">Cobrar RD$1,500 →</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal COMPLETAR VENTA (Carrito + Pago) -->
+<div id="checkoutModal" class="modal-bg hidden" onclick="if(event.target===this)closeCheckoutModal()">
+  <div class="modal">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--border);">
+      <button type="button" onclick="closeCheckoutModal()" style="border:none;background:#F3F4F6;color:var(--green);border-radius:10px;padding:7px 11px;font-size:13px;font-weight:700;cursor:pointer;">← Agregar más</button>
+      <strong style="font-size:16px;color:var(--green)">Completar Venta</strong>
+      <button type="button" onclick="clearCartConfirm()" style="border:none;background:none;color:#B42318;font-size:12px;font-weight:700;cursor:pointer;">Vaciar</button>
+    </div>
+
+    <div id="cartItemsList" style="background:#FFFDF8;border:1px solid var(--border);border-radius:12px;padding:4px 12px;margin-bottom:12px;"></div>
 
     <div class="row2">
       <select id="canalSelect">
@@ -364,8 +418,8 @@
     <input id="clienteInput" type="text" placeholder="Cliente (opcional, ej. María Pérez)">
     <input id="whatsappInput" type="tel" inputmode="tel" placeholder="📱 WhatsApp cliente (opcional, ej. 8095551234)">
     <div class="row2">
-      <button class="btn-outline" onclick="closeSaleModal()">Cancelar</button>
-      <button id="sellBtn" class="btn-primary" onclick="submitSale()">COBRAR RD$1,500</button>
+      <button type="button" class="btn-outline" onclick="closeCheckoutModal()">← Agregar más</button>
+      <button type="button" id="sellBtn" class="btn-primary" onclick="submitSale()">COBRAR RD$0</button>
     </div>
   </div>
 </div>
@@ -425,7 +479,8 @@ const CATALOG = [
 localStorage.removeItem('alex_pin');
 let PIN = '';
 let state = { inventory: [], sales: [], cashMoves: [], directSales: [], quotes: [], summary: {} };
-let form = { presentacion: 'Licorera 16.9 oz', sabor: 'Tradicional', qty: 1, porConfirmar: false, salePhoto: '', modalPhoto: '', modalTarget: null };
+let form = { sku: '', presentacion: 'Licorera 16.9 oz', sabor: 'Tradicional', qty: 1, porConfirmar: false, salePhoto: '', modalPhoto: '', modalTarget: null };
+let cart = [];
 let quoteLines = [];
 
 function fmt(n) { return 'RD$' + (Number(n) || 0).toLocaleString('en-US', { maximumFractionDigits: 2 }); }
@@ -495,10 +550,12 @@ function renderProductGrid() {
     const stock = inv ? inv.stockActual : null;
     const m = stockMeta(stock, !!p.noAlert);
     const emptyCls = (stock !== null && stock <= 0) ? 'is-empty' : '';
+    const inCart = cart.filter(c => c.sku === p.sku).reduce((a, c) => a + c.cantidad, 0);
     return `
       <button type="button" class="prod-card ${emptyCls}" onclick="openSaleModal('${p.sku}')">
         <div class="prod-img-wrap">
           <img src="${p.img}" alt="${p.presentacion} ${p.sabor}">
+          ${inCart > 0 ? `<span class="prod-cart-badge">🛒 ${inCart}</span>` : ''}
           <span class="prod-stock ${m.cls}">${m.badge}</span>
         </div>
         <div class="prod-body">
@@ -517,9 +574,10 @@ function updateModalBanner() {
   const m = stockMeta(stock, !!(p && p.noAlert));
   const el = document.getElementById('mStockBanner');
   el.className = 'stock-banner ' + m.cls;
-  if (stock !== null && stock > 0 && form.qty > stock) {
+  const alreadyInCart = cart.filter(c => c.sku === form.sku).reduce((a, c) => a + c.cantidad, 0);
+  if (stock !== null && stock > 0 && (form.qty + alreadyInCart) > stock) {
     el.className = 'stock-banner st-warn';
-    el.textContent = `⚠️ Estás cobrando ${form.qty} pero solo hay ${stock} en stock`;
+    el.textContent = `⚠️ Total pedido (${form.qty + alreadyInCart}) supera el stock (${stock})`;
   } else {
     el.textContent = m.banner;
   }
@@ -528,24 +586,116 @@ function updateModalBanner() {
 function openSaleModal(sku) {
   const p = CATALOG.find(x => x.sku === sku);
   const inv = state.inventory.find(i => i.sku === sku);
-  form.presentacion = p.presentacion; form.sabor = p.sabor; form.qty = 1; form.salePhoto = ''; form.porConfirmar = false;
+  form.sku = p.sku; form.presentacion = p.presentacion; form.sabor = p.sabor; form.qty = 1;
   document.getElementById('mImg').src = p.img;
   document.getElementById('mTitle').textContent = p.presentacion;
   document.getElementById('mSub').textContent = p.sub || ('Sabor ' + p.sabor);
   document.getElementById('qtyVal').textContent = '1';
   document.getElementById('priceInput').value = inv ? inv.precio : p.precio;
-  document.getElementById('metodoSelect').value = 'Efectivo';
-  document.getElementById('clienteInput').value = '';
-  document.getElementById('whatsappInput').value = '';
-  document.getElementById('bancoRefInput').value = '';
-  document.getElementById('receiptPreview').style.display = 'none';
-  document.getElementById('receiptInput').value = '';
-  toggleTransferUI(); setConf(false); updateTotal(); updateModalBanner();
+  updatePickTotal(); updateModalBanner();
   document.getElementById('saleModal').classList.remove('hidden');
 }
 function closeSaleModal() { document.getElementById('saleModal').classList.add('hidden'); }
-function chgQty(d) { form.qty = Math.max(1, form.qty + d); document.getElementById('qtyVal').textContent = form.qty; updateTotal(); updateModalBanner(); }
-function updateTotal() { const p = Number(document.getElementById('priceInput').value) || 0; document.getElementById('sellBtn').textContent = 'COBRAR ' + fmt(form.qty * p); }
+function chgQty(d) { form.qty = Math.max(1, form.qty + d); document.getElementById('qtyVal').textContent = form.qty; updatePickTotal(); updateModalBanner(); }
+function updatePickTotal() {
+  const p = Number(document.getElementById('priceInput').value) || 0;
+  document.getElementById('pickGoBtn').textContent = 'Cobrar ' + fmt(form.qty * p) + ' →';
+}
+
+function addCurrentToCart(goCheckout) {
+  const precioUnit = Number(document.getElementById('priceInput').value) || 0;
+  const existing = cart.find(c => c.sku === form.sku && c.precioUnit === precioUnit);
+  if (existing) existing.cantidad += form.qty;
+  else cart.push({ sku: form.sku, presentacion: form.presentacion, sabor: form.sabor, cantidad: form.qty, precioUnit });
+  closeSaleModal();
+  renderProductGrid();
+  renderCartBar();
+  if (goCheckout) openCheckoutModal();
+  else toast(`Agregado al carrito (${cart.reduce((a, c) => a + c.cantidad, 0)} art.)`);
+}
+
+function cartTotals() {
+  const count = cart.reduce((a, c) => a + c.cantidad, 0);
+  const total = cart.reduce((a, c) => a + c.cantidad * c.precioUnit, 0);
+  return { count, total };
+}
+
+function renderCartBar() {
+  const bar = document.getElementById('cartBar');
+  const { count, total } = cartTotals();
+  if (count > 0) {
+    document.getElementById('cartBarCount').textContent = `🛒 ${count} artículo${count === 1 ? '' : 's'} en el pedido`;
+    document.getElementById('cartBarTotal').textContent = fmt(total);
+    bar.classList.remove('hidden');
+    document.body.classList.add('has-cart');
+  } else {
+    bar.classList.add('hidden');
+    document.body.classList.remove('has-cart');
+  }
+}
+
+function renderCartItems() {
+  const el = document.getElementById('cartItemsList');
+  if (!cart.length) {
+    el.innerHTML = '<div style="padding:10px 0;color:var(--muted);font-size:13px;">Carrito vacío</div>';
+    document.getElementById('sellBtn').textContent = 'COBRAR RD$0';
+    return;
+  }
+  el.innerHTML = cart.map((c, idx) => `
+    <div class="cart-line">
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:13px;font-weight:700;color:var(--green);">${c.presentacion}</div>
+        <div style="font-size:12px;color:var(--muted);">${c.sabor} · ${fmt(c.precioUnit)}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <button type="button" class="cart-qty-btn" onclick="chgCartQty(${idx}, -1)">−</button>
+        <strong style="min-width:18px;text-align:center;font-size:14px;">${c.cantidad}</strong>
+        <button type="button" class="cart-qty-btn" onclick="chgCartQty(${idx}, 1)">+</button>
+        <strong style="min-width:68px;text-align:right;font-size:13px;">${fmt(c.cantidad * c.precioUnit)}</strong>
+        <button type="button" onclick="removeCartItem(${idx})" style="border:none;background:none;color:#B42318;font-weight:700;cursor:pointer;padding:2px 4px;">✕</button>
+      </div>
+    </div>`).join('');
+  updateCheckoutTotal();
+}
+
+function chgCartQty(idx, delta) {
+  if (!cart[idx]) return;
+  cart[idx].cantidad += delta;
+  if (cart[idx].cantidad <= 0) cart.splice(idx, 1);
+  renderProductGrid();
+  renderCartBar();
+  if (!cart.length) { closeCheckoutModal(); return; }
+  renderCartItems();
+}
+
+function removeCartItem(idx) {
+  cart.splice(idx, 1);
+  renderProductGrid();
+  renderCartBar();
+  if (!cart.length) { closeCheckoutModal(); return; }
+  renderCartItems();
+}
+
+function clearCartConfirm() {
+  if (!cart.length) return;
+  if (!confirm('¿Vaciar todos los productos del pedido actual?')) return;
+  cart = [];
+  closeCheckoutModal();
+  renderProductGrid();
+  renderCartBar();
+}
+
+function openCheckoutModal() {
+  if (!cart.length) return toast('Agrega al menos un producto');
+  renderCartItems();
+  toggleTransferUI();
+  document.getElementById('checkoutModal').classList.remove('hidden');
+}
+function closeCheckoutModal() { document.getElementById('checkoutModal').classList.add('hidden'); }
+function updateCheckoutTotal() {
+  const { total } = cartTotals();
+  document.getElementById('sellBtn').textContent = 'COBRAR ' + fmt(total);
+}
 function toggleTransferUI() { document.getElementById('transferBox').classList.toggle('hidden', document.getElementById('metodoSelect').value !== 'Transferencia'); }
 function setConf(porConf) { form.porConfirmar = porConf; document.getElementById('btnConf').classList.toggle('active', !porConf); document.getElementById('btnPorConf').classList.toggle('active', porConf); }
 
@@ -578,6 +728,7 @@ function formatWaPhone(raw) {
 function closeWaModal() { document.getElementById('waModal').classList.add('hidden'); }
 
 async function submitSale() {
+  if (!cart.length) return toast('Agrega al menos un producto');
   const btn = document.getElementById('sellBtn');
   btn.disabled = true; btn.textContent = 'Guardando...';
   const metodo = document.getElementById('metodoSelect').value;
@@ -587,8 +738,7 @@ async function submitSale() {
     const res = await apiPost({
       action: 'addSale',
       canal: document.getElementById('canalSelect').value,
-      presentacion: form.presentacion, sabor: form.sabor, cantidad: form.qty,
-      precioUnit: Number(document.getElementById('priceInput').value) || 0,
+      items: cart.map(c => ({ presentacion: c.presentacion, sabor: c.sabor, cantidad: c.cantidad, precioUnit: c.precioUnit })),
       metodo, porConfirmar: metodo === 'Transferencia' ? form.porConfirmar : false,
       bancoRef: document.getElementById('bancoRefInput').value.trim(),
       cliente: document.getElementById('clienteInput').value.trim(),
@@ -597,7 +747,17 @@ async function submitSale() {
       receiptBase64: metodo === 'Transferencia' ? form.salePhoto : '', receiptMime: 'image/jpeg'
     });
     if (res.ok) {
-      closeSaleModal();
+      cart = [];
+      form.salePhoto = ''; form.porConfirmar = false;
+      document.getElementById('metodoSelect').value = 'Efectivo';
+      document.getElementById('clienteInput').value = '';
+      document.getElementById('whatsappInput').value = '';
+      document.getElementById('bancoRefInput').value = '';
+      document.getElementById('receiptPreview').style.display = 'none';
+      document.getElementById('receiptInput').value = '';
+      setConf(false); toggleTransferUI();
+      closeCheckoutModal();
+      renderCartBar();
       toast('Venta registrada: ' + fmt(res.total));
       if (waNum && res.invoiceUrl) {
         const msg = `🎄✨¡Gracias por elegirnos!\n\nNos llena de ilusión saber que nuestro Alexander será parte de tus momentos especiales en esta Navidad.\n\n¡Que cada brindis esté lleno de alegría!\n\nCon cariño,\n\nGloria & Ana ❤️\nDulce Navidad 🎄✨\n\n📄 Tu factura (${res.id}): ${res.invoiceUrl}`;
@@ -610,7 +770,7 @@ async function submitSale() {
     }
     else toast(res.error || 'Error al guardar');
   } catch (e) { toast('Error de red'); }
-  btn.disabled = false; updateTotal();
+  btn.disabled = false; updateCheckoutTotal();
 }
 
 // COTIZACIONES
@@ -682,8 +842,8 @@ async function submitCashMove() {
   } else toast(res.error || 'Error');
 }
 
-function openConfirmModal(source, row, desc) {
-  form.modalTarget = { source, row }; form.modalPhoto = '';
+function openConfirmModal(source, row, desc, saleId) {
+  form.modalTarget = { source, row, saleId: saleId || '' }; form.modalPhoto = '';
   document.getElementById('modalDesc').textContent = desc;
   document.getElementById('modalBancoRef').value = '';
   document.getElementById('modalPreview').style.display = 'none';
@@ -693,7 +853,7 @@ function closeModal() { document.getElementById('confirmModal').classList.add('h
 async function submitConfirmPayment() {
   if (!form.modalTarget) return;
   const res = await apiPost({
-    action: 'confirmPayment', source: form.modalTarget.source, row: form.modalTarget.row,
+    action: 'confirmPayment', source: form.modalTarget.source, row: form.modalTarget.row, saleId: form.modalTarget.saleId,
     bancoRef: document.getElementById('modalBancoRef').value.trim(), receiptBase64: form.modalPhoto, receiptMime: 'image/jpeg'
   });
   closeModal();
@@ -707,10 +867,25 @@ async function addStockPrompt(row, label) {
   if (res.ok) { toast('Stock actualizado'); await loadData(); }
 }
 
+function groupSales(salesArr) {
+  const map = new Map();
+  (salesArr || []).forEach(s => {
+    const key = s.id || ('row-' + s.row);
+    if (!map.has(key)) {
+      map.set(key, { ...s, items: [s], total: Number(s.total) || 0 });
+    } else {
+      const g = map.get(key);
+      g.items.push(s);
+      g.total += Number(s.total) || 0;
+    }
+  });
+  return Array.from(map.values());
+}
+
 async function undoSale(id) {
-  const s = state.sales.find(x => x.id === id);
-  const label = s ? `${s.cantidad}x ${s.presentacion} ${s.sabor} (${fmt(s.total)})` : id;
-  if (!confirm(`¿Deshacer esta venta?\n\n${label}\n\nSe restaurará el inventario y se ajustará la caja.`)) return;
+  const g = groupSales(state.sales).find(x => x.id === id);
+  const desc = g ? g.items.map(it => `${it.cantidad}x ${it.presentacion} ${it.sabor}`).join(' + ') + ` (${fmt(g.total)})` : id;
+  if (!confirm(`¿Deshacer esta venta?\n\n${desc}\n\nSe restaurará el inventario y se ajustará la caja.`)) return;
   toast('Deshaciendo venta...');
   try {
     const res = await apiPost({ action: 'deleteSale', id });
@@ -721,18 +896,23 @@ async function undoSale(id) {
 
 function renderAll() {
   renderProductGrid();
-  document.getElementById('recentSalesList').innerHTML = state.sales.slice(0, 15).map(s => `
+  renderCartBar();
+  const grouped = groupSales(state.sales);
+  document.getElementById('recentSalesList').innerHTML = grouped.slice(0, 15).map(g => {
+    const linesHtml = g.items.map(it => `<div><strong>${it.cantidad}x ${it.presentacion}</strong> · ${it.sabor}</div>`).join('');
+    return `
     <div class="item">
-      <div>
-        <strong>${s.cantidad}x ${s.presentacion} · ${s.sabor}</strong>
-        <div style="font-size:12px;color:var(--muted)">${s.cliente || s.canal} · ${s.metodo} ${s.comprobante ? '· <a href="'+s.comprobante+'" target="_blank">📎 Foto</a>' : ''}</div>
+      <div style="font-size:13px;">
+        ${linesHtml}
+        <div style="font-size:12px;color:var(--muted);margin-top:2px;">${g.cliente || g.canal} · ${g.metodo} ${g.comprobante ? '· <a href="'+g.comprobante+'" target="_blank">📎 Foto</a>' : ''}</div>
       </div>
-      <div style="text-align:right">
-        <strong>${fmt(s.total)}</strong><br>
-        <span class="badge ${s.estado==='Cobrado'?'b-ok':'b-warn'}">${s.estado}</span><br>
-        <button type="button" class="btn-undo" onclick="undoSale('${String(s.id).replace(/'/g, '')}')">↩ Deshacer</button>
+      <div style="text-align:right;white-space:nowrap;">
+        <strong>${fmt(g.total)}</strong><br>
+        <span class="badge ${g.estado==='Cobrado'?'b-ok':'b-warn'}">${g.estado}</span><br>
+        <button type="button" class="btn-undo" onclick="undoSale('${String(g.id).replace(/'/g, '')}')">↩ Deshacer</button>
       </div>
-    </div>`).join('') || '<small style="color:var(--muted)">Sin ventas aún</small>';
+    </div>`;
+  }).join('') || '<small style="color:var(--muted)">Sin ventas aún</small>';
 
   document.getElementById('quotesList').innerHTML = (state.quotes || []).map(q => `
     <div class="item">
@@ -740,11 +920,14 @@ function renderAll() {
       <div style="text-align:right"><strong>${fmt(q.total)}</strong><br><span class="badge b-warn">${q.estado}</span></div>
     </div>`).join('') || '<small style="color:var(--muted)">Sin cotizaciones aún</small>';
 
-  document.getElementById('pendingSmnList').innerHTML = state.sales.filter(s => s.estado === 'Por confirmar').map(s => `
+  document.getElementById('pendingSmnList').innerHTML = grouped.filter(g => g.estado === 'Por confirmar').map(g => {
+    const sumDesc = g.items.map(it => `${it.cantidad}x ${it.presentacion}`).join(' + ');
+    return `
     <div class="item">
-      <div><strong>${s.cliente || s.id}</strong><div style="font-size:12px;color:var(--muted)">${s.cantidad}x ${s.presentacion} · ${fmt(s.total)}</div></div>
-      <button class="btn-sm" onclick="openConfirmModal('ventas', ${s.row}, '${(s.cliente||s.id)} — ${fmt(s.total)}')">Confirmar</button>
-    </div>`).join('') || '<small style="color:var(--muted)">Todo confirmado</small>';
+      <div><strong>${g.cliente || g.id}</strong><div style="font-size:12px;color:var(--muted)">${sumDesc} · ${fmt(g.total)}</div></div>
+      <button class="btn-sm" onclick="openConfirmModal('ventas', ${g.row}, '${String(g.cliente||g.id).replace(/'/g,'')} — ${fmt(g.total)}', '${String(g.id).replace(/'/g,'')}')">Confirmar</button>
+    </div>`;
+  }).join('') || '<small style="color:var(--muted)">Todo confirmado</small>';
 
   document.getElementById('pendingDirectList').innerHTML = state.directSales.filter(d => d.estado !== 'Cobrado').map(d => `
     <div class="item">
