@@ -306,9 +306,10 @@
   <!-- TAB 4: CAJA CHICA -->
   <section id="tab-caja" class="hidden">
     <div class="card">
-      <span class="label">Efectivo esperado en Caja Chica</span>
+      <span class="label">Efectivo actual en Caja Chica</span>
       <div class="kpi" id="cajaTotal">RD$0</div>
-      <small style="color:var(--muted)">Fondo inicial + Ventas efectivo − Gastos − Depósitos</small>
+      <div id="cajaDayBreakdown" style="font-size:12px;color:var(--muted);margin-bottom:10px;">Fondo inicial: RD$3,000 · Ventas efectivo hoy: RD$0</div>
+      <button type="button" id="closeCashBtn" class="btn-outline" style="width:100%;border-color:#1B4332;color:#1B4332;" onclick="closeCashDayAction()">🔒 Cerrar caja del día (retirar ventas y dejar RD$3,000)</button>
     </div>
 
     <div class="card">
@@ -332,7 +333,10 @@
     </div>
 
     <div class="card">
-      <span class="label">Movimientos recientes</span>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <span class="label" style="margin:0;" id="cashListTitle">Movimientos de hoy</span>
+        <button type="button" id="cashToggleHistBtn" class="btn-outline" style="padding:4px 9px;font-size:11px;" onclick="toggleCashHistory()">Ver historial</button>
+      </div>
       <div id="cashMovesList">Cargando...</div>
     </div>
   </section>
@@ -1501,6 +1505,31 @@ async function undoSale(id) {
   } catch (e) { toast('Error de red al deshacer'); }
 }
 
+let showAllCash = false;
+function toggleCashHistory() {
+  showAllCash = !showAllCash;
+  document.getElementById('cashListTitle').textContent = showAllCash ? 'Todos los movimientos' : 'Movimientos de hoy';
+  document.getElementById('cashToggleHistBtn').textContent = showAllCash ? 'Solo hoy' : 'Ver historial';
+  renderAll();
+}
+async function closeCashDayAction() {
+  const actual = Number(state.summary['Efectivo Actual en Caja Chica']) || 0;
+  const retirar = Math.max(0, actual - 3000);
+  if (retirar <= 0) return toast('La caja ya está en RD$3,000 (o menos)');
+  if (!confirm(`¿Cerrar la caja de hoy?\n\nEfectivo actual: ${fmt(actual)}\nSe retirarán: ${fmt(retirar)}\nQuedará fondo inicial: RD$3,000\n\nLas ventas del día siguen guardadas en Reportes.`)) return;
+  const btn = document.getElementById('closeCashBtn');
+  btn.disabled = true; btn.textContent = 'Cerrando caja...';
+  try {
+    const res = await apiPost({ action: 'closeCashDay', targetFund: 3000 });
+    if (res.ok) {
+      toast(`Caja cerrada: retirado ${fmt(res.retired)} · Queda RD$3,000`);
+      await loadData();
+    } else toast(res.error || 'Error al cerrar caja');
+  } catch (e) { toast('Error de red'); }
+  btn.disabled = false;
+  btn.textContent = '🔒 Cerrar caja del día (retirar ventas y dejar RD$3,000)';
+}
+
 function renderAll() {
   renderProductGrid();
   renderCartBar();
@@ -1562,15 +1591,22 @@ function renderAll() {
       <button class="btn-sm" onclick="openConfirmModal('directas', ${d.row}, '${d.factura} ${d.cliente} — ${fmt(d.pendiente)}')">Cobrado</button>
     </div>`).join('') || '<small style="color:var(--muted)">Sin facturas pendientes</small>';
 
-  document.getElementById('cajaTotal').textContent = fmt(state.summary['Efectivo Actual en Caja Chica']);
-  document.getElementById('cashMovesList').innerHTML = state.cashMoves.slice(0, 15).map(m => `
+  const cajaActualVal = Number(state.summary['Efectivo Actual en Caja Chica']) || 0;
+  document.getElementById('cajaTotal').textContent = fmt(cajaActualVal);
+  const todayStr = localYmd();
+  const todayMoves = (state.cashMoves || []).filter(m => String(m.fecha || '').slice(0, 10) === todayStr);
+  const todayCashSales = todayMoves.filter(m => m.tipo === 'Venta Efectivo').reduce((a, m) => a + (Number(m.monto) || 0), 0);
+  const todayCashOut = todayMoves.filter(m => m.tipo !== 'Venta Efectivo' && m.tipo !== 'Fondo Inicial').reduce((a, m) => a + (Number(m.monto) || 0), 0);
+  document.getElementById('cajaDayBreakdown').innerHTML = `Fondo inicial: <strong>RD$3,000</strong> · Ventas efectivo hoy: <strong>${fmt(todayCashSales)}</strong>${todayCashOut ? ` · Salidas hoy: <strong>−${fmt(todayCashOut)}</strong>` : ''}`;
+  const movesToShow = showAllCash ? (state.cashMoves || []).slice(0, 25) : todayMoves;
+  document.getElementById('cashMovesList').innerHTML = movesToShow.map(m => `
     <div class="item">
       <div>
         <strong>${m.tipo}</strong>
         <div style="font-size:12px;color:var(--muted)">${m.concepto} · ${m.fecha} ${m.comprobante ? '· <a href="'+m.comprobante+'" target="_blank">📎 Ver factura</a>' : ''}</div>
       </div>
       <strong>${fmt(m.monto)}</strong>
-    </div>`).join('') || '<small style="color:var(--muted)">Sin movimientos aún</small>';
+    </div>`).join('') || `<small style="color:var(--muted)">${showAllCash ? 'Sin movimientos aún' : 'Sin movimientos hoy (caja inicia en RD$3,000)'}</small>`;
 
   document.getElementById('summaryList').innerHTML = Object.entries(state.summary).map(([k,v]) => `
     <div class="item"><span style="font-size:13px">${k}</span><strong>${k.includes('Botellas') ? v : fmt(v)}</strong></div>`).join('');
