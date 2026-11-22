@@ -269,11 +269,16 @@
         </select>
         <input id="qEntrega" type="date" placeholder="Entrega prevista">
       </div>
-      <div style="background:#FFFDF8;border:1px solid var(--border);border-radius:12px;padding:10px 12px;margin-bottom:12px;">
+      <div style="background:#FFFDF8;border:1px solid var(--border);border-radius:12px;padding:10px 12px;margin-bottom:10px;">
         <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--muted);"><span>Subtotal</span><span id="qSub">RD$0</span></div>
         <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--muted);"><span>Ajuste</span><span id="qAdj">RD$0</span></div>
         <div style="display:flex;justify-content:space-between;font-size:17px;font-weight:800;color:var(--green);margin-top:4px;"><span>Total Cotizado</span><span id="qTot">RD$0</span></div>
       </div>
+
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:#175CD3;background:#EFF8FF;border:1px solid #B2DDFF;border-radius:10px;padding:9px 11px;margin-bottom:12px;cursor:pointer;">
+        <input id="qReserveCheck" type="checkbox" style="width:18px;height:18px;margin:0;accent-color:#175CD3;">
+        <span>🔒 Reservar inventario (descuenta de disponibles hasta pagar o cerrar)</span>
+      </label>
 
       <div class="row2">
         <button type="button" class="btn-outline" onclick="copyQuoteWhatsApp()">📋 Copiar texto</button>
@@ -551,6 +556,7 @@
     <a id="qaPdfLink" href="#" target="_blank" class="btn-outline hidden" style="display:block;text-align:center;text-decoration:none;margin-bottom:8px;">📄 Ver Cotización PDF</a>
     <button type="button" id="qaPdfBtn" class="btn-outline" style="width:100%;margin-bottom:8px;" onclick="viewQuotePdf()">📄 Generar Cotización PDF</button>
     <button type="button" class="btn-primary" style="margin-bottom:8px;" onclick="convertQuoteToSale()">✅ Convertir en venta</button>
+    <button type="button" id="qaReserveBtn" class="btn-outline" style="width:100%;margin-bottom:8px;border-color:#175CD3;color:#175CD3;background:#EFF8FF;" onclick="toggleQuoteReserve()">🔒 Reservar inventario</button>
     <div class="row2" style="margin-bottom:8px;">
       <button type="button" class="btn-outline" onclick="startEditQuote()">✏️ Modificar</button>
       <button type="button" class="btn-outline" style="border-color:#B54708;color:#B54708;" onclick="closeQuoteNoInterest()">🚫 No interesó</button>
@@ -728,7 +734,11 @@ function buildReportText(r, pdfUrl) {
         r.mermaUnits ? `• Mermas: ${r.mermaUnits} u.` : ''
       ].filter(Boolean).join('\n')
     : '';
-  return `📊 *Cierre de Ventas Alexander — Dulce Navidad*\n📅 Período: ${period}\n\n💰 *Total vendido: ${fmt(r.totVentas)}*\n(${r.orders} pedidos · ${r.totUnits} unidades)\n💵 Efectivo: ${fmt(r.totEfe)}\n🏦 Transferencias: ${fmt(r.totTrf)}${r.totPorConf ? `\n⏳ Por confirmar: ${fmt(r.totPorConf)}` : ''}\n\n📦 *Desglose por variedad:*\n${prods}${noRevTxt}\n\n💵 *Caja Chica actual:* ${fmt(state.summary['Efectivo Actual en Caja Chica'])}${pdfUrl ? `\n\n📄 Cierre PDF: ${pdfUrl}` : ''}`;
+  const resQuotes = (state.quotes || []).filter(q => !String(q.estado || '').includes('Cerrada') && q.reservado);
+  const resTxt = resQuotes.length
+    ? `\n\n🔒 *Stock reservado (pendiente de pago):*\n` + resQuotes.map(q => `• ${q.cliente}: ${q.propuesta} (${fmt(q.total)})`).join('\n')
+    : '';
+  return `📊 *Cierre de Ventas Alexander — Dulce Navidad*\n📅 Período: ${period}\n\n💰 *Total vendido: ${fmt(r.totVentas)}*\n(${r.orders} pedidos · ${r.totUnits} unidades)\n💵 Efectivo: ${fmt(r.totEfe)}\n🏦 Transferencias: ${fmt(r.totTrf)}${r.totPorConf ? `\n⏳ Por confirmar: ${fmt(r.totPorConf)}` : ''}\n\n📦 *Desglose por variedad:*\n${prods}${noRevTxt}${resTxt}\n\n💵 *Caja Chica actual:* ${fmt(state.summary['Efectivo Actual en Caja Chica'])}${pdfUrl ? `\n\n📄 Cierre PDF: ${pdfUrl}` : ''}`;
 }
 
 function renderReports() {
@@ -782,7 +792,7 @@ function renderReports() {
   const pendTrf = groupSales(state.sales).filter(g => g.estado === 'Por confirmar');
   document.getElementById('repPendingList').innerHTML = [
     ...pendTrf.map(g => `<div class="item"><span style="font-size:13px;">⏳ Transferencia: <strong>${g.cliente || g.id}</strong></span><strong>${fmt(g.total)}</strong></div>`),
-    ...openQ.map(q => `<div class="item" style="cursor:pointer;" onclick="openQuoteActionModal(${q.row})"><span style="font-size:13px;">📝 Cotización: <strong>${q.cliente}</strong></span><strong>${fmt(q.total)} ›</strong></div>`)
+    ...openQ.map(q => `<div class="item" style="cursor:pointer;" onclick="openQuoteActionModal(${q.row})"><div><span style="font-size:13px;">${q.reservado ? '🔒' : '📝'} ${q.reservado ? 'Reservado' : 'Cotización'}: <strong>${q.cliente}</strong></span>${q.reservado ? `<div style="font-size:11px;color:#175CD3;">${q.propuesta}</div>` : ''}</div><strong>${fmt(q.total)} ›</strong></div>`)
   ].join('') || '<small style="color:var(--muted)">Sin pendientes ni cotizaciones abiertas</small>';
 }
 
@@ -1213,7 +1223,8 @@ async function submitQuote() {
       action: isEdit ? 'updateQuote' : 'addQuote',
       row: editingQuoteRow || undefined,
       cliente: cli, whatsapp: wa, propuesta, items: quoteLines, unidades: units,
-      subtotal: sub, ajuste: adj, total: tot, entrega: document.getElementById('qEntrega').value
+      subtotal: sub, ajuste: adj, total: tot, entrega: document.getElementById('qEntrega').value,
+      reservado: document.getElementById('qReserveCheck').checked
     });
     if (res.ok) {
       toast(isEdit ? 'Cotización actualizada' : 'Cotización guardada con PDF');
@@ -1263,12 +1274,31 @@ function openQuoteActionModal(row) {
   if (!q) return;
   activeQuote = q;
   document.getElementById('qaCliente').textContent = q.cliente || 'Cliente';
-  document.getElementById('qaMeta').textContent = `${q.fecha}${q.entrega ? ' · Entrega: ' + q.entrega : ''} · ${q.estado}`;
+  document.getElementById('qaMeta').textContent = `${q.fecha}${q.entrega ? ' · Entrega: ' + q.entrega : ''} · ${q.estado}${q.reservado ? ' · 🔒 Reservado' : ''}`;
   const adjInfo = q.ajuste ? `<div style="font-size:12px;color:var(--muted);margin-top:4px;">Subtotal: ${fmt(q.subtotal)} · Ajuste: ${fmt(q.ajuste)}</div>` : '';
   document.getElementById('qaPropuesta').innerHTML = `<div>${q.propuesta}</div>${adjInfo}<div style="font-size:16px;font-weight:800;color:var(--green);margin-top:6px;">Total: ${fmt(q.total)}</div>`;
   document.getElementById('qaWhatsapp').value = q.whatsapp || '';
+  const rBtn = document.getElementById('qaReserveBtn');
+  const isClosed = String(q.estado || '').includes('Cerrada');
+  rBtn.classList.toggle('hidden', isClosed);
+  rBtn.textContent = q.reservado ? '🔓 Liberar inventario reservado' : '🔒 Reservar inventario';
   refreshQuoteWaLinks();
   document.getElementById('quoteActionModal').classList.remove('hidden');
+}
+async function toggleQuoteReserve() {
+  if (!activeQuote) return;
+  const nextVal = !activeQuote.reservado;
+  const rBtn = document.getElementById('qaReserveBtn');
+  rBtn.disabled = true; rBtn.textContent = 'Actualizando...';
+  try {
+    const res = await apiPost({ action: 'setQuoteReserved', row: activeQuote.row, reservado: nextVal });
+    if (res.ok) {
+      toast(nextVal ? '🔒 Stock reservado para esta cotización' : '🔓 Stock liberado al inventario disponible');
+      closeQuoteActionModal();
+      await loadData();
+    } else toast(res.error || 'Error al actualizar reserva');
+  } catch (e) { toast('Error de red'); }
+  rBtn.disabled = false;
 }
 function closeQuoteActionModal() { document.getElementById('quoteActionModal').classList.add('hidden'); }
 
@@ -1326,6 +1356,7 @@ function startEditQuote() {
   document.getElementById('qCliente').value = q.cliente || '';
   document.getElementById('qWhatsapp').value = q.whatsapp || '';
   document.getElementById('qEntrega').value = (q.entrega || '').slice(0, 10);
+  document.getElementById('qReserveCheck').checked = !!q.reservado;
   const items = parseQuoteItems(q);
   quoteLines = items.map(it => ({ sku: it.sku, label: it.label, qty: Number(it.qty) || 1, unit: Number(it.unit) || 0, sub: (Number(it.qty) || 1) * (Number(it.unit) || 0) }));
   const ratio = q.subtotal > 0 ? (q.ajuste / q.subtotal) : 0;
@@ -1346,6 +1377,7 @@ function cancelEditQuote() {
   document.getElementById('qWhatsapp').value = '';
   document.getElementById('qEntrega').value = '';
   document.getElementById('qAjuste').value = 'none';
+  document.getElementById('qReserveCheck').checked = false;
   renderQuotePreview();
 }
 
@@ -1503,6 +1535,7 @@ function renderAll() {
     const isSold = String(q.estado).includes('Vendida');
     const isClosed = String(q.estado).includes('No interesó');
     const bCls = isSold ? 'b-ok' : isClosed ? 'st-bad' : 'b-warn';
+    const resBadge = (!isSold && !isClosed && q.reservado) ? '<span class="badge" style="background:#EFF8FF;color:#175CD3;margin-right:4px;">🔒 Reservado</span>' : '';
     return `
     <div class="item" style="cursor:pointer;" onclick="openQuoteActionModal(${q.row})">
       <div>
@@ -1511,7 +1544,7 @@ function renderAll() {
       </div>
       <div style="text-align:right;white-space:nowrap;">
         <strong>${fmt(q.total)}</strong><br>
-        <span class="badge ${bCls}">${q.estado}</span> <span style="color:var(--muted);font-weight:700;">›</span>
+        ${resBadge}<span class="badge ${bCls}">${q.estado}</span> <span style="color:var(--muted);font-weight:700;">›</span>
       </div>
     </div>`;
   }).join('') || '<small style="color:var(--muted)">Sin cotizaciones aún</small>';
@@ -1546,11 +1579,11 @@ function renderAll() {
 
   document.getElementById('inventoryList').innerHTML = state.inventory.map(i => `
     <div class="item">
-      <div style="flex:1;min-width:0;"><strong>${i.presentacion} · ${i.sabor}</strong><div style="font-size:12px;color:var(--muted)">${fmt(i.precio)} · ${i.estado}</div></div>
+      <div style="flex:1;min-width:0;"><strong>${i.presentacion} · ${i.sabor}</strong><div style="font-size:12px;color:var(--muted)">${fmt(i.precio)} · ${i.estado}${i.stockReservado > 0 ? ` · <span style="color:#175CD3;font-weight:700;">🔒 ${i.stockReservado} reserv.</span> (${i.stockFisico} fís.)` : ''}</div></div>
       <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
-        <button class="btn-outline" style="width:36px;height:36px;padding:0;font-size:18px;font-weight:800;border-color:#B42318;color:#B42318;background:#FFF5F5;" onclick="adjustStockPrompt(${i.row}, '${String(i.presentacion + ' ' + i.sabor).replace(/'/g, '')}', -1, ${i.stockActual})">−</button>
+        <button class="btn-outline" style="width:36px;height:36px;padding:0;font-size:18px;font-weight:800;border-color:#B42318;color:#B42318;background:#FFF5F5;" onclick="adjustStockPrompt(${i.row}, '${String(i.presentacion + ' ' + i.sabor).replace(/'/g, '')}', -1, ${i.stockFisico ?? i.stockActual})">−</button>
         <strong style="min-width:26px;text-align:center;font-size:16px;">${i.stockActual}</strong>
-        <button class="btn-outline" style="width:36px;height:36px;padding:0;font-size:18px;font-weight:800;" onclick="adjustStockPrompt(${i.row}, '${String(i.presentacion + ' ' + i.sabor).replace(/'/g, '')}', 1, ${i.stockActual})">+</button>
+        <button class="btn-outline" style="width:36px;height:36px;padding:0;font-size:18px;font-weight:800;" onclick="adjustStockPrompt(${i.row}, '${String(i.presentacion + ' ' + i.sabor).replace(/'/g, '')}', 1, ${i.stockFisico ?? i.stockActual})">+</button>
       </div>
     </div>`).join('');
 }
