@@ -455,9 +455,21 @@
       <button type="button" onclick="clearCartConfirm()" style="border:none;background:none;color:#B42318;font-size:12px;font-weight:700;cursor:pointer;">Vaciar</button>
     </div>
 
-    <div id="cartItemsList" style="background:#FFFDF8;border:1px solid var(--border);border-radius:12px;padding:4px 12px;margin-bottom:12px;"></div>
+    <div id="cartItemsList" style="background:#FFFDF8;border:1px solid var(--border);border-radius:12px;padding:4px 12px;margin-bottom:10px;"></div>
 
-    <div class="row2">
+    <span class="label" style="margin-bottom:4px;">Tipo / Ajuste</span>
+    <select id="saleAdjustSelect" onchange="updateCheckoutUI()">
+      <option value="venta">💵 Venta normal</option>
+      <option value="desc5">🏷️ Descuento 5%</option>
+      <option value="desc10">🏷️ Descuento 10%</option>
+      <option value="desc_custom">🏷️ Descuento monto fijo (RD$)</option>
+      <option value="regalo">🎁 Regalo / Cortesía (RD$0)</option>
+      <option value="merma">⚠️ Merma / Daño (RD$0)</option>
+    </select>
+    <input id="customDiscountInput" type="number" inputmode="numeric" class="hidden" placeholder="Monto de descuento en RD$" oninput="updateCheckoutTotal()">
+    <div id="discountSummaryBox" class="hidden" style="background:#FEF3C7;border-radius:10px;padding:7px 11px;font-size:13px;color:#92400E;margin-bottom:10px;font-weight:600;"></div>
+
+    <div id="paymentRow" class="row2">
       <select id="canalSelect">
         <option value="SMN 27 Feb">SMN 27 Feb</option>
         <option value="Venta Directa">Venta Directa</option>
@@ -481,8 +493,9 @@
       </label>
     </div>
 
-    <input id="clienteInput" type="text" placeholder="Cliente (opcional, ej. María Pérez)">
+    <input id="clienteInput" type="text" placeholder="Cliente / Destinatario (opcional)">
     <input id="whatsappInput" type="tel" inputmode="tel" placeholder="📱 WhatsApp cliente (opcional, ej. 8095551234)">
+    <input id="saleCommentInput" type="text" placeholder="Comentario / nota (opcional)">
     <div class="row2">
       <button type="button" class="btn-outline" onclick="closeCheckoutModal()">← Agregar más</button>
       <button type="button" id="sellBtn" class="btn-primary" onclick="submitSale()">COBRAR RD$0</button>
@@ -670,14 +683,22 @@ function computeReportData() {
     const f = String(x.fecha || '').slice(0, 10);
     return f >= s && f <= e;
   });
-  let totVentas = 0, totEfe = 0, totTrf = 0, totPorConf = 0, totUnits = 0;
+  let totVentas = 0, totEfe = 0, totTrf = 0, totPorConf = 0, totUnits = 0, regaloUnits = 0, mermaUnits = 0;
   const orderIds = new Set();
   const byProd = {};
+  const noRevItems = [];
   daySales.forEach(r => {
-    orderIds.add(r.id);
-    const key = `${r.presentacion} · ${r.sabor}`;
     const qty = Number(r.cantidad) || 0;
     const tot = Number(r.total) || 0;
+    if (r.estado === 'Regalo' || r.estado === 'Merma') {
+      if (r.estado === 'Regalo') regaloUnits += qty;
+      else mermaUnits += qty;
+      const cleanNote = String(r.notas || '').replace(/\s*\|\s*Factura:\s*https?:\/\/\S+/i, '').replace(/^Factura:\s*https?:\/\/\S+/i, '').trim();
+      noRevItems.push({ tipo: r.estado, qty, prod: `${r.presentacion} · ${r.sabor}`, cliente: r.cliente || '', nota: cleanNote });
+      return;
+    }
+    orderIds.add(r.id);
+    const key = `${r.presentacion} · ${r.sabor}`;
     totVentas += tot; totUnits += qty;
     if (r.estado === 'Por confirmar') totPorConf += tot;
     else if (r.metodo === 'Transferencia') totTrf += tot;
@@ -694,24 +715,38 @@ function computeReportData() {
     else if (c.tipo === 'Depósito Banco') depositos += m;
     else if (c.tipo === 'Retiro') retiros += m;
   });
-  return { s, e, daySales, dayCash, totVentas, totEfe, totTrf, totPorConf, totUnits, orders: orderIds.size, byProd, fondo, vEfeCaja, gastos, depositos, retiros };
+  return { s, e, daySales, dayCash, totVentas, totEfe, totTrf, totPorConf, totUnits, orders: orderIds.size, byProd, regaloUnits, mermaUnits, noRevItems, fondo, vEfeCaja, gastos, depositos, retiros };
 }
 
 function buildReportText(r, pdfUrl) {
   const period = r.s === r.e ? r.s : `${r.s} al ${r.e}`;
   const prods = Object.entries(r.byProd).sort((a, b) => b[1].qty - a[1].qty)
     .map(([k, v]) => `• ${v.qty}x ${k} — ${fmt(v.tot)}`).join('\n') || '• Sin ventas';
-  return `📊 *Cierre de Ventas Alexander — Dulce Navidad*\n📅 Período: ${period}\n\n💰 *Total vendido: ${fmt(r.totVentas)}*\n(${r.orders} pedidos · ${r.totUnits} unidades)\n💵 Efectivo: ${fmt(r.totEfe)}\n🏦 Transferencias: ${fmt(r.totTrf)}${r.totPorConf ? `\n⏳ Por confirmar: ${fmt(r.totPorConf)}` : ''}\n\n📦 *Desglose por variedad:*\n${prods}\n\n💵 *Caja Chica actual:* ${fmt(state.summary['Efectivo Actual en Caja Chica'])}${pdfUrl ? `\n\n📄 Cierre PDF: ${pdfUrl}` : ''}`;
+  const noRevTxt = (r.regaloUnits || r.mermaUnits)
+    ? `\n\n🎁 *Salidas sin ingreso (RD$0):*\n` + [
+        r.regaloUnits ? `• Regalos: ${r.regaloUnits} u.` : '',
+        r.mermaUnits ? `• Mermas: ${r.mermaUnits} u.` : ''
+      ].filter(Boolean).join('\n')
+    : '';
+  return `📊 *Cierre de Ventas Alexander — Dulce Navidad*\n📅 Período: ${period}\n\n💰 *Total vendido: ${fmt(r.totVentas)}*\n(${r.orders} pedidos · ${r.totUnits} unidades)\n💵 Efectivo: ${fmt(r.totEfe)}\n🏦 Transferencias: ${fmt(r.totTrf)}${r.totPorConf ? `\n⏳ Por confirmar: ${fmt(r.totPorConf)}` : ''}\n\n📦 *Desglose por variedad:*\n${prods}${noRevTxt}\n\n💵 *Caja Chica actual:* ${fmt(state.summary['Efectivo Actual en Caja Chica'])}${pdfUrl ? `\n\n📄 Cierre PDF: ${pdfUrl}` : ''}`;
 }
 
 function renderReports() {
   const r = computeReportData();
   document.getElementById('repTotalSales').textContent = fmt(r.totVentas);
   document.getElementById('repSalesMeta').textContent = `${r.orders} pedido${r.orders===1?'':'s'} · ${r.totUnits} unidad${r.totUnits===1?'':'es'}`;
+  const noRevHtml = (r.regaloUnits || r.mermaUnits) ? `
+    <div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--border);">
+      <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700;color:var(--green);margin-bottom:4px;">
+        <span>Salidas sin ingreso (RD$0)</span>
+        <span>${r.regaloUnits ? '🎁 ' + r.regaloUnits + ' reg.' : ''}${r.regaloUnits && r.mermaUnits ? ' · ' : ''}${r.mermaUnits ? '⚠️ ' + r.mermaUnits + ' merma' : ''}</span>
+      </div>
+      ${r.noRevItems.map(it => `<div style="font-size:12px;color:var(--muted);padding:2px 0;">${it.tipo==='Regalo'?'🎁':'⚠️'} <strong>${it.qty}x</strong> ${it.prod}${it.cliente ? ' ('+it.cliente+')' : ''}${it.nota ? ' — <em>'+it.nota+'</em>' : ''}</div>`).join('')}
+    </div>` : '';
   document.getElementById('repPaymentBreakdown').innerHTML = `
     <div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0;"><span>💵 Efectivo cobrado</span><strong>${fmt(r.totEfe)}</strong></div>
     <div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0;"><span>🏦 Transferencias cobradas</span><strong>${fmt(r.totTrf)}</strong></div>
-    <div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0;color:${r.totPorConf?'var(--warn)':'var(--muted)'};"><span>⏳ Por confirmar</span><strong>${fmt(r.totPorConf)}</strong></div>`;
+    <div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0;color:${r.totPorConf?'var(--warn)':'var(--muted)'};"><span>⏳ Por confirmar</span><strong>${fmt(r.totPorConf)}</strong></div>${noRevHtml}`;
 
   const sortedProds = Object.entries(r.byProd).sort((a, b) => b[1].qty - a[1].qty);
   document.getElementById('repVarietyList').innerHTML = sortedProds.map(([k, v]) => `
@@ -928,15 +963,65 @@ function clearCartConfirm() {
 function openCheckoutModal() {
   if (!cart.length) return toast('Agrega al menos un producto');
   renderCartItems();
-  toggleTransferUI();
+  updateCheckoutUI();
   document.getElementById('checkoutModal').classList.remove('hidden');
 }
 function closeCheckoutModal() { document.getElementById('checkoutModal').classList.add('hidden'); }
-function updateCheckoutTotal() {
-  const { total } = cartTotals();
-  document.getElementById('sellBtn').textContent = 'COBRAR ' + fmt(total);
+
+function calcCheckoutPricing() {
+  const { total: subtotal } = cartTotals();
+  const mode = document.getElementById('saleAdjustSelect').value;
+  if (mode === 'regalo' || mode === 'merma') return { mode, saleType: mode, subtotal, discount: subtotal, finalTotal: 0, label: mode === 'regalo' ? 'Regalo' : 'Merma' };
+  let discount = 0, label = '';
+  if (mode === 'desc5') { discount = Math.round(subtotal * 0.05); label = `Desc. 5% (-${fmt(discount)})`; }
+  else if (mode === 'desc10') { discount = Math.round(subtotal * 0.10); label = `Desc. 10% (-${fmt(discount)})`; }
+  else if (mode === 'desc_custom') {
+    const raw = Math.max(0, Number(document.getElementById('customDiscountInput').value) || 0);
+    discount = Math.min(subtotal, raw);
+    if (discount > 0) label = `Descuento (-${fmt(discount)})`;
+  }
+  return { mode, saleType: 'venta', subtotal, discount, finalTotal: Math.max(0, subtotal - discount), label };
 }
-function toggleTransferUI() { document.getElementById('transferBox').classList.toggle('hidden', document.getElementById('metodoSelect').value !== 'Transferencia'); }
+
+function updateCheckoutUI() {
+  const mode = document.getElementById('saleAdjustSelect').value;
+  const isNoRev = (mode === 'regalo' || mode === 'merma');
+  document.getElementById('customDiscountInput').classList.toggle('hidden', mode !== 'desc_custom');
+  document.getElementById('paymentRow').classList.toggle('hidden', isNoRev);
+  document.getElementById('whatsappInput').classList.toggle('hidden', isNoRev);
+  if (isNoRev) document.getElementById('transferBox').classList.add('hidden');
+  else toggleTransferUI();
+  const cmt = document.getElementById('saleCommentInput');
+  cmt.placeholder = mode === 'regalo' ? 'Comentario obligatorio (ej. Regalo a...)' : mode === 'merma' ? 'Comentario obligatorio (ej. Botella rota / degustación)' : 'Comentario / nota (opcional)';
+  updateCheckoutTotal();
+}
+
+function updateCheckoutTotal() {
+  const pr = calcCheckoutPricing();
+  const box = document.getElementById('discountSummaryBox');
+  const btn = document.getElementById('sellBtn');
+  if (pr.saleType === 'regalo') {
+    box.textContent = '🎁 Salida por Regalo: descuenta inventario sin sumar ingreso (RD$0)';
+    box.classList.remove('hidden');
+    btn.textContent = '🎁 GUARDAR REGALO (RD$0)';
+  } else if (pr.saleType === 'merma') {
+    box.textContent = '⚠️ Salida por Merma: descuenta inventario sin sumar ingreso (RD$0)';
+    box.classList.remove('hidden');
+    btn.textContent = '⚠️ GUARDAR MERMA (RD$0)';
+  } else if (pr.discount > 0) {
+    box.textContent = `Subtotal ${fmt(pr.subtotal)} · ${pr.label} → Total ${fmt(pr.finalTotal)}`;
+    box.classList.remove('hidden');
+    btn.textContent = 'COBRAR ' + fmt(pr.finalTotal);
+  } else {
+    box.classList.add('hidden');
+    btn.textContent = 'COBRAR ' + fmt(pr.finalTotal);
+  }
+}
+function toggleTransferUI() {
+  const mode = document.getElementById('saleAdjustSelect').value;
+  const isNoRev = (mode === 'regalo' || mode === 'merma');
+  document.getElementById('transferBox').classList.toggle('hidden', isNoRev || document.getElementById('metodoSelect').value !== 'Transferencia');
+}
 function setConf(porConf) { form.porConfirmar = porConf; document.getElementById('btnConf').classList.toggle('active', !porConf); document.getElementById('btnPorConf').classList.toggle('active', porConf); }
 
 function handlePhoto(input, previewId, target) {
@@ -971,39 +1056,71 @@ function closeWaModal() { document.getElementById('waModal').classList.add('hidd
 
 async function submitSale() {
   if (!cart.length) return toast('Agrega al menos un producto');
+  const pr = calcCheckoutPricing();
+  const isNoRev = (pr.saleType === 'regalo' || pr.saleType === 'merma');
+  const comment = document.getElementById('saleCommentInput').value.trim();
+  if (isNoRev && !comment) {
+    document.getElementById('saleCommentInput').focus();
+    return toast('Agrega un comentario explicando el motivo');
+  }
   const btn = document.getElementById('sellBtn');
   btn.disabled = true; btn.textContent = 'Guardando...';
   const metodo = document.getElementById('metodoSelect').value;
-  const waRaw = document.getElementById('whatsappInput').value.trim();
+  const waRaw = isNoRev ? '' : document.getElementById('whatsappInput').value.trim();
   const waNum = formatWaPhone(waRaw);
+
+  // Distribute discount proportionally across items so Ventas & Resumen match exact finalTotal
+  let itemsPayload;
+  if (isNoRev) {
+    itemsPayload = cart.map(c => ({ presentacion: c.presentacion, sabor: c.sabor, cantidad: c.cantidad, precioUnit: 0, total: 0 }));
+  } else if (pr.discount > 0 && pr.subtotal > 0) {
+    let remainingDisc = pr.discount;
+    itemsPayload = cart.map((c, idx) => {
+      const lineSub = c.cantidad * c.precioUnit;
+      const share = idx === cart.length - 1 ? remainingDisc : Math.round(pr.discount * (lineSub / pr.subtotal));
+      remainingDisc -= share;
+      const lineTot = Math.max(0, lineSub - share);
+      return { presentacion: c.presentacion, sabor: c.sabor, cantidad: c.cantidad, precioUnit: Math.round(lineTot / c.cantidad), total: lineTot };
+    });
+  } else {
+    itemsPayload = cart.map(c => ({ presentacion: c.presentacion, sabor: c.sabor, cantidad: c.cantidad, precioUnit: c.precioUnit, total: c.cantidad * c.precioUnit }));
+  }
+  const notasStr = [pr.saleType === 'venta' ? pr.label : '', comment].filter(Boolean).join(' · ');
+
   try {
     const res = await apiPost({
       action: 'addSale',
+      saleType: pr.saleType,
       canal: document.getElementById('canalSelect').value,
-      items: cart.map(c => ({ presentacion: c.presentacion, sabor: c.sabor, cantidad: c.cantidad, precioUnit: c.precioUnit })),
-      metodo, porConfirmar: metodo === 'Transferencia' ? form.porConfirmar : false,
-      bancoRef: document.getElementById('bancoRefInput').value.trim(),
+      items: itemsPayload,
+      metodo: isNoRev ? pr.label : metodo,
+      porConfirmar: !isNoRev && metodo === 'Transferencia' ? form.porConfirmar : false,
+      bancoRef: isNoRev ? '' : document.getElementById('bancoRefInput').value.trim(),
       cliente: document.getElementById('clienteInput').value.trim(),
       whatsapp: waRaw,
-      generateInvoice: !!waNum,
+      notas: notasStr,
+      generateInvoice: !isNoRev && !!waNum,
       fromQuoteRow: convertingQuoteRow || '',
-      receiptBase64: metodo === 'Transferencia' ? form.salePhoto : '', receiptMime: 'image/jpeg'
+      receiptBase64: !isNoRev && metodo === 'Transferencia' ? form.salePhoto : '', receiptMime: 'image/jpeg'
     });
     if (res.ok) {
       cart = [];
       convertingQuoteRow = null;
       form.salePhoto = ''; form.porConfirmar = false;
+      document.getElementById('saleAdjustSelect').value = 'venta';
+      document.getElementById('customDiscountInput').value = '';
+      document.getElementById('saleCommentInput').value = '';
       document.getElementById('metodoSelect').value = 'Efectivo';
       document.getElementById('clienteInput').value = '';
       document.getElementById('whatsappInput').value = '';
       document.getElementById('bancoRefInput').value = '';
       document.getElementById('receiptPreview').style.display = 'none';
       document.getElementById('receiptInput').value = '';
-      setConf(false); toggleTransferUI();
+      setConf(false); updateCheckoutUI();
       closeCheckoutModal();
       renderCartBar();
-      toast('Venta registrada: ' + fmt(res.total));
-      if (waNum && res.invoiceUrl) {
+      toast(pr.saleType === 'regalo' ? '🎁 Regalo registrado (stock descontado)' : pr.saleType === 'merma' ? '⚠️ Merma registrada (stock descontado)' : 'Venta registrada: ' + fmt(res.total));
+      if (!isNoRev && waNum && res.invoiceUrl) {
         const msg = `🎄✨¡Gracias por elegirnos!\n\nNos llena de ilusión saber que nuestro Alexander será parte de tus momentos especiales en esta Navidad.\n\n¡Que cada brindis esté lleno de alegría!\n\nCon cariño,\n\nGloria & Ana ❤️\nDulce Navidad 🎄✨\n\n📄 Tu factura (${res.id}): ${res.invoiceUrl}`;
         document.getElementById('waSummary').textContent = `Factura ${res.id} por ${fmt(res.total)} lista para ${waRaw}`;
         document.getElementById('waSendLink').href = `https://wa.me/${waNum}?text=${encodeURIComponent(msg)}`;
@@ -1361,15 +1478,22 @@ function renderAll() {
   const grouped = groupSales(state.sales);
   document.getElementById('recentSalesList').innerHTML = grouped.slice(0, 15).map(g => {
     const linesHtml = g.items.map(it => `<div><strong>${it.cantidad}x ${it.presentacion}</strong> · ${it.sabor}</div>`).join('');
+    const cleanNote = String(g.notas || '').replace(/\s*\|\s*Factura:\s*https?:\/\/\S+/i, '').replace(/^Factura:\s*https?:\/\/\S+/i, '').trim();
+    const badgeHtml = g.estado === 'Regalo'
+      ? '<span class="badge" style="background:#EFF8FF;color:#175CD3;">🎁 Regalo</span>'
+      : g.estado === 'Merma'
+      ? '<span class="badge st-bad">⚠️ Merma</span>'
+      : `<span class="badge ${g.estado==='Cobrado'?'b-ok':'b-warn'}">${g.estado}</span>`;
     return `
     <div class="item">
       <div style="font-size:13px;">
         ${linesHtml}
         <div style="font-size:12px;color:var(--muted);margin-top:2px;">${g.cliente || g.canal} · ${g.metodo} ${g.comprobante ? '· <a href="'+g.comprobante+'" target="_blank">📎 Foto</a>' : ''}</div>
+        ${cleanNote ? `<div style="font-size:11px;color:#555;margin-top:2px;font-style:italic;">💬 ${cleanNote}</div>` : ''}
       </div>
       <div style="text-align:right;white-space:nowrap;">
         <strong>${fmt(g.total)}</strong><br>
-        <span class="badge ${g.estado==='Cobrado'?'b-ok':'b-warn'}">${g.estado}</span><br>
+        ${badgeHtml}<br>
         <button type="button" class="btn-undo" onclick="undoSale('${String(g.id).replace(/'/g, '')}')">↩ Deshacer</button>
       </div>
     </div>`;
