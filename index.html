@@ -210,7 +210,10 @@
       <small id="statusSub">Alexander · En línea</small>
     </div>
   </div>
-  <button class="refresh-btn" onclick="loadData()">↻</button>
+  <div style="display:flex;gap:6px;">
+    <button class="refresh-btn" onclick="openReportsTab()" title="Reportes">📊</button>
+    <button class="refresh-btn" onclick="loadData()" title="Actualizar">↻</button>
+  </div>
 </header>
 
 <div id="toast" class="toast"></div>
@@ -343,6 +346,58 @@
     <div class="card">
       <span class="label">Inventario actual</span>
       <div id="inventoryList">Cargando...</div>
+    </div>
+  </section>
+
+  <!-- TAB 6: REPORTES -->
+  <section id="tab-reportes" class="hidden">
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <span class="label" style="margin:0;">📊 Reportes &amp; Cierre Diario</span>
+        <small style="color:var(--muted);">Auto-cierre 11 PM</small>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px;">
+        <button type="button" class="btn-outline" style="padding:7px 4px;font-size:12px;" onclick="setReportPreset('today')">Hoy</button>
+        <button type="button" class="btn-outline" style="padding:7px 4px;font-size:12px;" onclick="setReportPreset('yesterday')">Ayer</button>
+        <button type="button" class="btn-outline" style="padding:7px 4px;font-size:12px;" onclick="setReportPreset('weekend')">Finde</button>
+        <button type="button" class="btn-outline" style="padding:7px 4px;font-size:12px;" onclick="setReportPreset('all')">Todo</button>
+      </div>
+      <div class="row2">
+        <div><small style="color:var(--muted);font-size:11px;">Desde</small><input id="repStart" type="date" onchange="renderReports()" style="margin-bottom:0;"></div>
+        <div><small style="color:var(--muted);font-size:11px;">Hasta</small><input id="repEnd" type="date" onchange="renderReports()" style="margin-bottom:0;"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <span class="label">1. Cierre de Ventas del Período</span>
+      <div class="kpi" id="repTotalSales">RD$0</div>
+      <div id="repSalesMeta" style="font-size:13px;color:var(--muted);margin-bottom:10px;">0 pedidos · 0 unidades</div>
+      <div id="repPaymentBreakdown" style="background:#FFFDF8;border:1px solid var(--border);border-radius:12px;padding:8px 12px;margin-bottom:12px;"></div>
+      <span class="label">Desglose por variedad</span>
+      <div id="repVarietyList" style="margin-bottom:12px;">Sin ventas en este período</div>
+      <div class="row2" style="margin-bottom:8px;">
+        <button type="button" class="btn-outline" onclick="copyReportWhatsApp()">📋 Copiar texto</button>
+        <button type="button" id="repPdfBtn" class="btn-primary" onclick="generateReportPdfAction()">📄 Guardar Cierre PDF</button>
+      </div>
+      <div id="repPdfActions" class="hidden" style="margin-top:8px;">
+        <a id="repPdfLink" href="#" target="_blank" class="btn-outline" style="display:block;text-align:center;text-decoration:none;margin-bottom:8px;">📄 Abrir Cierre PDF en Drive</a>
+        <a id="repWaLink" href="#" target="_blank" class="btn-primary" style="display:block;text-align:center;text-decoration:none;background:#128C7E;">📲 Enviar Cierre por WhatsApp</a>
+      </div>
+    </div>
+
+    <div class="card">
+      <span class="label">2. Arqueo de Caja</span>
+      <div id="repCashAudit">Sin movimientos</div>
+    </div>
+
+    <div class="card">
+      <span class="label">3. Reposición Sugerida (Stock Bajo / Agotado)</span>
+      <div id="repRestockList">Todo con buen stock</div>
+    </div>
+
+    <div class="card">
+      <span class="label">4. Pendientes y Cotizaciones Abiertas</span>
+      <div id="repPendingList">Sin pendientes</div>
     </div>
   </section>
 </main>
@@ -569,10 +624,154 @@ async function apiPost(payload) {
 }
 
 function goTab(id, btn) {
-  ['vender','cotizar','cobrar','caja','stock'].forEach(t => document.getElementById('tab-' + t).classList.add('hidden'));
+  ['vender','cotizar','cobrar','caja','stock','reportes'].forEach(t => document.getElementById('tab-' + t).classList.add('hidden'));
   document.getElementById('tab-' + id).classList.remove('hidden');
   document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
+  if (btn) btn.classList.add('active');
+}
+
+function localYmd(d) {
+  const dt = d || new Date();
+  return dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0') + '-' + String(dt.getDate()).padStart(2, '0');
+}
+
+function openReportsTab() {
+  goTab('reportes', null);
+  if (!document.getElementById('repStart').value) setReportPreset('today');
+  else renderReports();
+}
+
+function setReportPreset(mode) {
+  const now = new Date();
+  let s = localYmd(now), e = localYmd(now);
+  if (mode === 'yesterday') {
+    const y = new Date(now); y.setDate(y.getDate() - 1);
+    s = e = localYmd(y);
+  } else if (mode === 'weekend') {
+    const y = new Date(now); y.setDate(y.getDate() - 1);
+    s = localYmd(y); e = localYmd(now);
+  } else if (mode === 'all') {
+    s = '2026-01-01'; e = '2026-12-31';
+  }
+  document.getElementById('repStart').value = s;
+  document.getElementById('repEnd').value = e;
+  document.getElementById('repPdfActions').classList.add('hidden');
+  renderReports();
+}
+
+function computeReportData() {
+  const s = document.getElementById('repStart').value || localYmd();
+  const e = document.getElementById('repEnd').value || s;
+  const daySales = (state.sales || []).filter(x => {
+    const f = String(x.fecha || '').slice(0, 10);
+    return f >= s && f <= e;
+  });
+  const dayCash = (state.cashMoves || []).filter(x => {
+    const f = String(x.fecha || '').slice(0, 10);
+    return f >= s && f <= e;
+  });
+  let totVentas = 0, totEfe = 0, totTrf = 0, totPorConf = 0, totUnits = 0;
+  const orderIds = new Set();
+  const byProd = {};
+  daySales.forEach(r => {
+    orderIds.add(r.id);
+    const key = `${r.presentacion} · ${r.sabor}`;
+    const qty = Number(r.cantidad) || 0;
+    const tot = Number(r.total) || 0;
+    totVentas += tot; totUnits += qty;
+    if (r.estado === 'Por confirmar') totPorConf += tot;
+    else if (r.metodo === 'Transferencia') totTrf += tot;
+    else totEfe += tot;
+    if (!byProd[key]) byProd[key] = { qty: 0, tot: 0 };
+    byProd[key].qty += qty; byProd[key].tot += tot;
+  });
+  let fondo = 0, vEfeCaja = 0, gastos = 0, depositos = 0, retiros = 0;
+  dayCash.forEach(c => {
+    const m = Number(c.monto) || 0;
+    if (c.tipo === 'Fondo Inicial') fondo += m;
+    else if (c.tipo === 'Venta Efectivo') vEfeCaja += m;
+    else if (c.tipo === 'Gasto') gastos += m;
+    else if (c.tipo === 'Depósito Banco') depositos += m;
+    else if (c.tipo === 'Retiro') retiros += m;
+  });
+  return { s, e, daySales, dayCash, totVentas, totEfe, totTrf, totPorConf, totUnits, orders: orderIds.size, byProd, fondo, vEfeCaja, gastos, depositos, retiros };
+}
+
+function buildReportText(r, pdfUrl) {
+  const period = r.s === r.e ? r.s : `${r.s} al ${r.e}`;
+  const prods = Object.entries(r.byProd).sort((a, b) => b[1].qty - a[1].qty)
+    .map(([k, v]) => `• ${v.qty}x ${k} — ${fmt(v.tot)}`).join('\n') || '• Sin ventas';
+  return `📊 *Cierre de Ventas Alexander — Dulce Navidad*\n📅 Período: ${period}\n\n💰 *Total vendido: ${fmt(r.totVentas)}*\n(${r.orders} pedidos · ${r.totUnits} unidades)\n💵 Efectivo: ${fmt(r.totEfe)}\n🏦 Transferencias: ${fmt(r.totTrf)}${r.totPorConf ? `\n⏳ Por confirmar: ${fmt(r.totPorConf)}` : ''}\n\n📦 *Desglose por variedad:*\n${prods}\n\n💵 *Caja Chica actual:* ${fmt(state.summary['Efectivo Actual en Caja Chica'])}${pdfUrl ? `\n\n📄 Cierre PDF: ${pdfUrl}` : ''}`;
+}
+
+function renderReports() {
+  const r = computeReportData();
+  document.getElementById('repTotalSales').textContent = fmt(r.totVentas);
+  document.getElementById('repSalesMeta').textContent = `${r.orders} pedido${r.orders===1?'':'s'} · ${r.totUnits} unidad${r.totUnits===1?'':'es'}`;
+  document.getElementById('repPaymentBreakdown').innerHTML = `
+    <div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0;"><span>💵 Efectivo cobrado</span><strong>${fmt(r.totEfe)}</strong></div>
+    <div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0;"><span>🏦 Transferencias cobradas</span><strong>${fmt(r.totTrf)}</strong></div>
+    <div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0;color:${r.totPorConf?'var(--warn)':'var(--muted)'};"><span>⏳ Por confirmar</span><strong>${fmt(r.totPorConf)}</strong></div>`;
+
+  const sortedProds = Object.entries(r.byProd).sort((a, b) => b[1].qty - a[1].qty);
+  document.getElementById('repVarietyList').innerHTML = sortedProds.map(([k, v]) => `
+    <div class="item">
+      <span style="font-size:13px;"><strong>${v.qty}x</strong> ${k}</span>
+      <strong>${fmt(v.tot)}</strong>
+    </div>`).join('') || '<small style="color:var(--muted)">Sin ventas en este período</small>';
+
+  const cajaActual = Number(state.summary['Efectivo Actual en Caja Chica']) || 0;
+  const gastosList = r.dayCash.filter(c => c.tipo !== 'Venta Efectivo').map(c => `
+    <div class="item">
+      <div style="font-size:12px;"><strong>${c.tipo}</strong> · ${c.concepto} ${c.comprobante ? '· <a href="'+c.comprobante+'" target="_blank">📎 Factura</a>' : ''}</div>
+      <strong style="font-size:13px;">${fmt(c.monto)}</strong>
+    </div>`).join('');
+  document.getElementById('repCashAudit').innerHTML = `
+    <div style="font-size:13px;margin-bottom:8px;">
+      <div style="display:flex;justify-content:space-between;padding:2px 0;"><span>Ventas efectivo (período)</span><strong>${fmt(r.vEfeCaja)}</strong></div>
+      <div style="display:flex;justify-content:space-between;padding:2px 0;"><span>Gastos / Depósitos / Retiros</span><strong>−${fmt(r.gastos + r.depositos + r.retiros)}</strong></div>
+      <div style="display:flex;justify-content:space-between;padding:4px 0;border-top:1px solid var(--border);margin-top:4px;font-size:15px;color:var(--green);"><strong>Efectivo total en Caja Chica</strong><strong>${fmt(cajaActual)}</strong></div>
+    </div>${gastosList}`;
+
+  const restock = (state.inventory || []).filter(i => {
+    const p = CATALOG.find(c => c.sku === i.sku);
+    return (p && p.noAlert) ? i.stockActual <= 0 : i.stockActual <= LOW_STOCK_LIMIT;
+  });
+  document.getElementById('repRestockList').innerHTML = restock.map(i => `
+    <div class="item">
+      <span style="font-size:13px;">${i.presentacion} · ${i.sabor}</span>
+      <span class="badge ${i.stockActual<=0?'st-bad':'b-warn'}">${i.stockActual <= 0 ? 'Agotado' : i.stockActual + ' disp.'}</span>
+    </div>`).join('') || '<small style="color:var(--ok)">Todo con stock saludable</small>';
+
+  const openQ = (state.quotes || []).filter(q => !String(q.estado || '').includes('Cerrada'));
+  const pendTrf = groupSales(state.sales).filter(g => g.estado === 'Por confirmar');
+  document.getElementById('repPendingList').innerHTML = [
+    ...pendTrf.map(g => `<div class="item"><span style="font-size:13px;">⏳ Transferencia: <strong>${g.cliente || g.id}</strong></span><strong>${fmt(g.total)}</strong></div>`),
+    ...openQ.map(q => `<div class="item" style="cursor:pointer;" onclick="openQuoteActionModal(${q.row})"><span style="font-size:13px;">📝 Cotización: <strong>${q.cliente}</strong></span><strong>${fmt(q.total)} ›</strong></div>`)
+  ].join('') || '<small style="color:var(--muted)">Sin pendientes ni cotizaciones abiertas</small>';
+}
+
+function copyReportWhatsApp() {
+  const r = computeReportData();
+  const msg = buildReportText(r, '');
+  navigator.clipboard?.writeText(msg).then(() => toast('Reporte copiado para WhatsApp')).catch(() => alert(msg));
+}
+
+async function generateReportPdfAction() {
+  const r = computeReportData();
+  const btn = document.getElementById('repPdfBtn');
+  btn.disabled = true; btn.textContent = 'Generando PDF...';
+  try {
+    const res = await apiPost({ action: 'generateReportPdf', startDate: r.s, endDate: r.e });
+    if (res.ok && res.pdfUrl) {
+      document.getElementById('repPdfLink').href = res.pdfUrl;
+      const msg = buildReportText(r, res.pdfUrl);
+      document.getElementById('repWaLink').href = `https://wa.me/?text=${encodeURIComponent(msg)}`;
+      document.getElementById('repPdfActions').classList.remove('hidden');
+      toast('Cierre PDF guardado en Drive');
+    } else toast(res.error || 'Error al generar PDF');
+  } catch (e) { toast('Error de red'); }
+  btn.disabled = false; btn.textContent = '📄 Guardar Cierre PDF';
 }
 
 const LOW_STOCK_LIMIT = 5;
@@ -1158,6 +1357,7 @@ async function undoSale(id) {
 function renderAll() {
   renderProductGrid();
   renderCartBar();
+  if (!document.getElementById('tab-reportes').classList.contains('hidden')) renderReports();
   const grouped = groupSales(state.sales);
   document.getElementById('recentSalesList').innerHTML = grouped.slice(0, 15).map(g => {
     const linesHtml = g.items.map(it => `<div><strong>${it.cantidad}x ${it.presentacion}</strong> · ${it.sabor}</div>`).join('');
