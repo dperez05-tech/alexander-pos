@@ -501,6 +501,23 @@
       </label>
     </div>
 
+    <div id="deliveryBox" class="hidden" style="background:#EFF8FF;border:1px solid #B2DDFF;border-radius:12px;padding:10px 12px;margin-bottom:10px;">
+      <span class="label" style="color:#175CD3;margin-bottom:6px;">📍 Datos de entrega (recap para el cliente)</span>
+      <select id="deliveryPlaceSelect" style="margin-bottom:8px;">
+        <option value="">Lugar de retiro (opcional)</option>
+        <option value="Los Cacicazgos">Los Cacicazgos</option>
+        <option value="Supermercados Nacional 27">Supermercados Nacional 27</option>
+      </select>
+      <div class="row2">
+        <input id="deliveryDateInput" type="date" style="margin-bottom:0;" title="Fecha de entrega">
+        <select id="deliverySlotSelect" style="margin-bottom:0;">
+          <option value="">Horario</option>
+          <option value="AM">AM</option>
+          <option value="PM">PM</option>
+        </select>
+      </div>
+    </div>
+
     <input id="clienteInput" type="text" placeholder="Cliente / Destinatario (opcional)">
     <input id="whatsappInput" type="tel" inputmode="tel" placeholder="📱 WhatsApp cliente (opcional, ej. 8095551234)">
     <input id="saleCommentInput" type="text" placeholder="Comentario / nota (opcional)">
@@ -974,6 +991,7 @@ function clearCartConfirm() {
 
 function openCheckoutModal() {
   if (!cart.length) return toast('Agrega al menos un producto');
+  document.getElementById('deliveryBox').classList.toggle('hidden', !convertingQuoteRow);
   renderCartItems();
   updateCheckoutUI();
   document.getElementById('checkoutModal').classList.remove('hidden');
@@ -1097,7 +1115,12 @@ async function submitSale() {
   } else {
     itemsPayload = cart.map(c => ({ presentacion: c.presentacion, sabor: c.sabor, cantidad: c.cantidad, precioUnit: c.precioUnit, total: c.cantidad * c.precioUnit }));
   }
-  const notasStr = [pr.saleType === 'venta' ? pr.label : '', comment].filter(Boolean).join(' · ');
+  const dPlace = convertingQuoteRow ? document.getElementById('deliveryPlaceSelect').value : '';
+  const dDateRaw = convertingQuoteRow ? document.getElementById('deliveryDateInput').value : '';
+  const dSlot = convertingQuoteRow ? document.getElementById('deliverySlotSelect').value : '';
+  const dDateFmt = dDateRaw ? dDateRaw.split('-').reverse().join('/') : '';
+  const deliveryNote = (dPlace || dDateFmt || dSlot) ? ('Entrega: ' + [dPlace, dDateFmt, dSlot].filter(Boolean).join(' · ')) : '';
+  const notasStr = [pr.saleType === 'venta' ? pr.label : '', deliveryNote, comment].filter(Boolean).join(' · ');
 
   try {
     const res = await apiPost({
@@ -1122,6 +1145,10 @@ async function submitSale() {
       document.getElementById('saleAdjustSelect').value = 'venta';
       document.getElementById('customDiscountInput').value = '';
       document.getElementById('saleCommentInput').value = '';
+      document.getElementById('deliveryPlaceSelect').value = '';
+      document.getElementById('deliveryDateInput').value = '';
+      document.getElementById('deliverySlotSelect').value = '';
+      document.getElementById('deliveryBox').classList.add('hidden');
       document.getElementById('metodoSelect').value = 'Efectivo';
       document.getElementById('clienteInput').value = '';
       document.getElementById('whatsappInput').value = '';
@@ -1133,7 +1160,13 @@ async function submitSale() {
       renderCartBar();
       toast(pr.saleType === 'regalo' ? '🎁 Regalo registrado (stock descontado)' : pr.saleType === 'merma' ? '⚠️ Merma registrada (stock descontado)' : 'Venta registrada: ' + fmt(res.total));
       if (!isNoRev && waNum && res.invoiceUrl) {
-        const msg = `🎄✨¡Gracias por elegirnos!\n\nNos llena de ilusión saber que nuestro Alexander será parte de tus momentos especiales en esta Navidad.\n\n¡Que cada brindis esté lleno de alegría!\n\nCon cariño,\n\nGloria & Ana ❤️\nDulce Navidad 🎄✨\n\n📄 Tu factura (${res.id}): ${res.invoiceUrl}`;
+        const deliveryWa = (dPlace || dDateFmt || dSlot)
+          ? `\n\n📍 *Datos de entrega:*`
+            + (dPlace ? `\n• Lugar de retiro: ${dPlace}` : '')
+            + (dDateFmt ? `\n• Fecha de entrega: ${dDateFmt}` : '')
+            + (dSlot ? `\n• Horario: ${dSlot}` : '')
+          : '';
+        const msg = `🎄✨¡Gracias por elegirnos!\n\nNos llena de ilusión saber que nuestro Alexander será parte de tus momentos especiales en esta Navidad.\n\n¡Que cada brindis esté lleno de alegría!${deliveryWa}\n\nCon cariño,\n\nGloria & Ana ❤️\nDulce Navidad 🎄✨\n\n📄 Tu factura (${res.id}): ${res.invoiceUrl}`;
         document.getElementById('waSummary').textContent = `Factura ${res.id} por ${fmt(res.total)} lista para ${waRaw}`;
         document.getElementById('waSendLink').href = `https://wa.me/${waNum}?text=${encodeURIComponent(msg)}`;
         document.getElementById('pdfViewLink').href = res.invoiceUrl;
@@ -1400,6 +1433,9 @@ function convertQuoteToSale() {
   convertingQuoteRow = activeQuote.row;
   document.getElementById('clienteInput').value = activeQuote.cliente || '';
   document.getElementById('whatsappInput').value = document.getElementById('qaWhatsapp').value.trim() || activeQuote.whatsapp || '';
+  document.getElementById('deliveryPlaceSelect').value = '';
+  document.getElementById('deliveryDateInput').value = (activeQuote.entrega || '').slice(0, 10);
+  document.getElementById('deliverySlotSelect').value = '';
   closeQuoteActionModal();
   renderProductGrid();
   renderCartBar();
