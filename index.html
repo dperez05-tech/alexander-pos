@@ -1134,6 +1134,9 @@ async function submitSale() {
       cliente: document.getElementById('clienteInput').value.trim(),
       whatsapp: waRaw,
       notas: notasStr,
+      deliveryPlace: dPlace,
+      deliveryDate: dDateFmt,
+      deliverySlot: dSlot,
       generateInvoice: !isNoRev && !!waNum,
       fromQuoteRow: convertingQuoteRow || '',
       receiptBase64: !isNoRev && metodo === 'Transferencia' ? form.salePhoto : '', receiptMime: 'image/jpeg'
@@ -1160,13 +1163,7 @@ async function submitSale() {
       renderCartBar();
       toast(pr.saleType === 'regalo' ? '🎁 Regalo registrado (stock descontado)' : pr.saleType === 'merma' ? '⚠️ Merma registrada (stock descontado)' : 'Venta registrada: ' + fmt(res.total));
       if (!isNoRev && waNum && res.invoiceUrl) {
-        const deliveryWa = (dPlace || dDateFmt || dSlot)
-          ? `\n\n📍 *Datos de entrega:*`
-            + (dPlace ? `\n• Lugar de retiro: ${dPlace}` : '')
-            + (dDateFmt ? `\n• Fecha de entrega: ${dDateFmt}` : '')
-            + (dSlot ? `\n• Horario: ${dSlot}` : '')
-          : '';
-        const msg = `🎄✨¡Gracias por elegirnos!\n\nNos llena de ilusión saber que nuestro Alexander será parte de tus momentos especiales en esta Navidad.\n\n¡Que cada brindis esté lleno de alegría!${deliveryWa}\n\nCon cariño,\n\nGloria & Ana ❤️\nDulce Navidad 🎄✨\n\n📄 Tu factura (${res.id}): ${res.invoiceUrl}`;
+        const msg = `🎄✨¡Gracias por elegirnos!\n\nNos llena de ilusión saber que nuestro Alexander será parte de tus momentos especiales en esta Navidad.\n\n¡Que cada brindis esté lleno de alegría!\n\nCon cariño,\n\nGloria & Ana ❤️\nDulce Navidad 🎄✨\n\n📄 Tu factura (${res.id}): ${res.invoiceUrl}`;
         document.getElementById('waSummary').textContent = `Factura ${res.id} por ${fmt(res.total)} lista para ${waRaw}`;
         document.getElementById('waSendLink').href = `https://wa.me/${waNum}?text=${encodeURIComponent(msg)}`;
         document.getElementById('pdfViewLink').href = res.invoiceUrl;
