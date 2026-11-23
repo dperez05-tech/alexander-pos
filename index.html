@@ -1184,7 +1184,7 @@ function copyQuoteWhatsApp() {
   const { sub, adj, tot } = calcQuoteTotals();
   const linesTxt = quoteLines.map(l => `• ${l.qty}x Alexander ${l.label} — ${fmt(l.sub)}`).join('\n');
   const adjTxt = adj !== 0 ? `\nAjuste: ${fmt(adj)}` : '';
-  const msg = `🎄 *Cotización Alexander — Dulce Navidad*\nCliente: ${cli}\n\n${linesTxt}\n\nSubtotal: ${fmt(sub)}${adjTxt}\n*Total: ${fmt(tot)}*`;
+  const msg = `🎄 *Cotización Alexander — Dulce Navidad*\nCliente: ${cli}\n\n${linesTxt}\n\nSubtotal: ${fmt(sub)}${adjTxt}\n*Total: ${fmt(tot)}*\n\n🏦 *BANCO POPULAR*\nTitular: Zitrone Sweet & Salty\nNúmero de cuenta: 830506408\nRNC: 132550331\n\nUna vez realizada la transferencia, compártenos el comprobante para trabajar tu pedido.\n\nCon cariño,\nGloria & Ana ❤️`;
   navigator.clipboard?.writeText(msg).then(() => toast('Cotización copiada para WhatsApp')).catch(() => alert(msg));
 }
 function parseQuoteItems(q) {
@@ -1260,7 +1260,7 @@ function refreshQuoteWaLinks() {
   }
 
   if (hasPdf && waNum) {
-    const msg = `🎄✨ *Cotización Alexander — Dulce Navidad*\nHola ${activeQuote.cliente}, aquí tienes tu cotización por *${fmt(activeQuote.total)}*:\n\n📄 Ver Cotización PDF: ${activeQuote.pdfUrl}\n\nCon cariño,\nGloria & Ana ❤️`;
+    const msg = `🎄✨ *Cotización Alexander — Dulce Navidad*\nHola ${activeQuote.cliente}, aquí tienes tu cotización por *${fmt(activeQuote.total)}*:\n\n📄 Ver Cotización PDF: ${activeQuote.pdfUrl}\n\n🏦 *BANCO POPULAR*\nTitular: Zitrone Sweet & Salty\nNúmero de cuenta: 830506408\nRNC: 132550331\n\nUna vez realizada la transferencia, compártenos el comprobante para trabajar tu pedido.\n\nCon cariño,\nGloria & Ana ❤️`;
     waLink.href = `https://wa.me/${waNum}?text=${encodeURIComponent(msg)}`;
     waLink.classList.remove('hidden');
     waBtn.classList.add('hidden');
