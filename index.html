@@ -316,6 +316,7 @@
       <span class="label">Registrar movimiento</span>
       <select id="cajaTipo">
         <option value="Gasto">🧾 Gasto (hielo, bolsas, etc.)</option>
+        <option value="Adelanto / Pedido futuro">📥 Adelanto / Pedido futuro (entra a caja)</option>
         <option value="Depósito Banco">🏦 Depósito al banco</option>
         <option value="Fondo Inicial">💵 Fondo inicial / Cambio</option>
         <option value="Retiro">📤 Retiro de efectivo</option>
@@ -370,10 +371,11 @@
         <button type="button" class="btn-outline" style="padding:7px 4px;font-size:12px;" onclick="setReportPreset('weekend')">Finde</button>
         <button type="button" class="btn-outline" style="padding:7px 4px;font-size:12px;" onclick="setReportPreset('all')">Todo</button>
       </div>
-      <div class="row2">
-        <div><small style="color:var(--muted);font-size:11px;">Desde</small><input id="repStart" type="date" onchange="renderReports()" style="margin-bottom:0;"></div>
-        <div><small style="color:var(--muted);font-size:11px;">Hasta</small><input id="repEnd" type="date" onchange="renderReports()" style="margin-bottom:0;"></div>
+      <div class="row2" style="margin-bottom:8px;">
+        <div><small style="color:var(--muted);font-size:11px;">Desde</small><input id="repStart" type="date" oninput="onReportDateChange()" onchange="onReportDateChange()" style="margin-bottom:0;"></div>
+        <div><small style="color:var(--muted);font-size:11px;">Hasta</small><input id="repEnd" type="date" oninput="onReportDateChange()" onchange="onReportDateChange()" style="margin-bottom:0;"></div>
       </div>
+      <button type="button" class="btn-outline" style="width:100%;padding:8px;font-size:13px;" onclick="onReportDateChange()">🔍 Aplicar fechas</button>
     </div>
 
     <div class="card">
@@ -679,6 +681,11 @@ function openReportsTab() {
   else renderReports();
 }
 
+function onReportDateChange() {
+  document.getElementById('repPdfActions').classList.add('hidden');
+  renderReports();
+}
+
 function setReportPreset(mode) {
   const now = new Date();
   let s = localYmd(now), e = localYmd(now);
@@ -686,8 +693,12 @@ function setReportPreset(mode) {
     const y = new Date(now); y.setDate(y.getDate() - 1);
     s = e = localYmd(y);
   } else if (mode === 'weekend') {
-    const y = new Date(now); y.setDate(y.getDate() - 1);
-    s = localYmd(y); e = localYmd(now);
+    // Most recent Saturday -> Sunday
+    const dow = now.getDay(); // 0=Sun, 6=Sat
+    const daysSinceSat = dow === 6 ? 0 : (dow + 1);
+    const sat = new Date(now); sat.setDate(now.getDate() - daysSinceSat);
+    const sun = new Date(sat); sun.setDate(sat.getDate() + 1);
+    s = localYmd(sat); e = localYmd(sun);
   } else if (mode === 'all') {
     s = '2026-01-01'; e = '2026-12-31';
   }
@@ -1629,8 +1640,9 @@ function renderAll() {
   const todayStr = localYmd();
   const todayMoves = (state.cashMoves || []).filter(m => String(m.fecha || '').slice(0, 10) === todayStr);
   const todayCashSales = todayMoves.filter(m => m.tipo === 'Venta Efectivo').reduce((a, m) => a + (Number(m.monto) || 0), 0);
-  const todayCashOut = todayMoves.filter(m => m.tipo !== 'Venta Efectivo' && m.tipo !== 'Fondo Inicial').reduce((a, m) => a + (Number(m.monto) || 0), 0);
-  document.getElementById('cajaDayBreakdown').innerHTML = `Fondo inicial: <strong>RD$3,000</strong> · Ventas efectivo hoy: <strong>${fmt(todayCashSales)}</strong>${todayCashOut ? ` · Salidas hoy: <strong>−${fmt(todayCashOut)}</strong>` : ''}`;
+  const todayAdelantos = todayMoves.filter(m => m.tipo === 'Adelanto / Pedido futuro').reduce((a, m) => a + (Number(m.monto) || 0), 0);
+  const todayCashOut = todayMoves.filter(m => m.tipo !== 'Venta Efectivo' && m.tipo !== 'Fondo Inicial' && m.tipo !== 'Adelanto / Pedido futuro').reduce((a, m) => a + (Number(m.monto) || 0), 0);
+  document.getElementById('cajaDayBreakdown').innerHTML = `Fondo inicial: <strong>RD$3,000</strong> · Ventas efectivo hoy: <strong>${fmt(todayCashSales)}</strong>${todayAdelantos ? ` · Adelantos hoy: <strong>+${fmt(todayAdelantos)}</strong>` : ''}${todayCashOut ? ` · Salidas hoy: <strong>−${fmt(todayCashOut)}</strong>` : ''}`;
   const movesToShow = showAllCash ? (state.cashMoves || []).slice(0, 25) : todayMoves;
   document.getElementById('cashMovesList').innerHTML = movesToShow.map(m => `
     <div class="item">
