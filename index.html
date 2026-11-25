@@ -490,10 +490,19 @@
       </select>
     </div>
 
-    <label id="futureDeliveryWrap" style="display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:600;color:#1B4332;background:#F4FBF7;border:1px solid #B7E4C7;border-radius:10px;padding:8px 10px;margin-bottom:10px;cursor:pointer;">
+    <label id="futureDeliveryWrap" style="display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:600;color:#1B4332;background:#F4FBF7;border:1px solid #B7E4C7;border-radius:10px;padding:8px 10px;margin-bottom:8px;cursor:pointer;">
       <input id="futureDeliveryCheck" type="checkbox" style="width:17px;height:17px;margin:0;accent-color:#1B4332;" onchange="toggleFutureDeliveryUI()">
       <span>📦 Entrega futura (cobra y suma a caja, sin descontar stock de hoy)</span>
     </label>
+
+    <label id="partialPayWrap" style="display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:600;color:#9A3412;background:#FFF7ED;border:1px solid #FED7AA;border-radius:10px;padding:8px 10px;margin-bottom:8px;cursor:pointer;">
+      <input id="partialPayCheck" type="checkbox" style="width:17px;height:17px;margin:0;accent-color:#9A3412;" onchange="updateCheckoutUI()">
+      <span>💰 Pago parcial / Abono (el resto queda en ⏳ Cobros)</span>
+    </label>
+    <div id="partialPayBox" class="hidden" style="margin-bottom:10px;">
+      <input id="abonoInput" type="number" inputmode="numeric" placeholder="Monto que abona hoy (RD$)" oninput="updateCheckoutTotal()" style="margin-bottom:6px;">
+      <div id="abonoSummaryBox" style="background:#FFF7ED;border-radius:8px;padding:6px 10px;font-size:12px;color:#9A3412;font-weight:600;"></div>
+    </div>
 
     <div id="transferBox" class="hidden">
       <div class="seg">
@@ -815,7 +824,8 @@ function renderReports() {
 
   const restock = (state.inventory || []).filter(i => {
     const p = CATALOG.find(c => c.sku === i.sku);
-    return (p && p.noAlert) ? i.stockActual <= 0 : i.stockActual <= LOW_STOCK_LIMIT;
+    if (!p) return false;
+    return p.noAlert ? i.stockActual <= 0 : i.stockActual <= LOW_STOCK_LIMIT;
   });
   document.getElementById('repRestockList').innerHTML = restock.map(i => `
     <div class="item">
@@ -1013,6 +1023,8 @@ function toggleFutureDeliveryUI() {
 function openCheckoutModal() {
   if (!cart.length) return toast('Agrega al menos un producto');
   document.getElementById('futureDeliveryCheck').checked = false;
+  document.getElementById('partialPayCheck').checked = false;
+  document.getElementById('abonoInput').value = '';
   document.getElementById('deliveryBox').classList.toggle('hidden', !convertingQuoteRow);
   renderCartItems();
   updateCheckoutUI();
@@ -1040,6 +1052,10 @@ function updateCheckoutUI() {
   const isNoRev = (mode === 'regalo' || mode === 'merma');
   document.getElementById('customDiscountInput').classList.toggle('hidden', mode !== 'desc_custom');
   document.getElementById('paymentRow').classList.toggle('hidden', isNoRev);
+  document.getElementById('futureDeliveryWrap').classList.toggle('hidden', isNoRev);
+  document.getElementById('partialPayWrap').classList.toggle('hidden', isNoRev);
+  const isPartial = !isNoRev && document.getElementById('partialPayCheck').checked;
+  document.getElementById('partialPayBox').classList.toggle('hidden', !isPartial);
   document.getElementById('whatsappInput').classList.toggle('hidden', isNoRev);
   if (isNoRev) document.getElementById('transferBox').classList.add('hidden');
   else toggleTransferUI();
@@ -1052,6 +1068,12 @@ function updateCheckoutTotal() {
   const pr = calcCheckoutPricing();
   const box = document.getElementById('discountSummaryBox');
   const btn = document.getElementById('sellBtn');
+  const isPartial = pr.saleType === 'venta' && document.getElementById('partialPayCheck').checked;
+  const abonoVal = isPartial ? Math.max(0, Math.min(pr.finalTotal, Number(document.getElementById('abonoInput').value) || 0)) : 0;
+  if (isPartial) {
+    const pend = Math.max(0, pr.finalTotal - abonoVal);
+    document.getElementById('abonoSummaryBox').textContent = `Pedido total: ${fmt(pr.finalTotal)} · Abona hoy: ${fmt(abonoVal)} · Pendiente en ⏳ Cobros: ${fmt(pend)}`;
+  }
   if (pr.saleType === 'regalo') {
     box.textContent = '🎁 Salida por Regalo: descuenta inventario sin sumar ingreso (RD$0)';
     box.classList.remove('hidden');
@@ -1060,6 +1082,10 @@ function updateCheckoutTotal() {
     box.textContent = '⚠️ Salida por Merma: descuenta inventario sin sumar ingreso (RD$0)';
     box.classList.remove('hidden');
     btn.textContent = '⚠️ GUARDAR MERMA (RD$0)';
+  } else if (isPartial && abonoVal > 0 && abonoVal < pr.finalTotal) {
+    if (pr.discount > 0) { box.textContent = `Subtotal ${fmt(pr.subtotal)} · ${pr.label} → Total ${fmt(pr.finalTotal)}`; box.classList.remove('hidden'); }
+    else box.classList.add('hidden');
+    btn.textContent = 'COBRAR ABONO ' + fmt(abonoVal);
   } else if (pr.discount > 0) {
     box.textContent = `Subtotal ${fmt(pr.subtotal)} · ${pr.label} → Total ${fmt(pr.finalTotal)}`;
     box.classList.remove('hidden');
@@ -1115,28 +1141,44 @@ async function submitSale() {
     document.getElementById('saleCommentInput').focus();
     return toast('Agrega un comentario explicando el motivo');
   }
+  const isPartial = !isNoRev && document.getElementById('partialPayCheck').checked;
+  const abonoVal = isPartial ? Math.max(0, Number(document.getElementById('abonoInput').value) || 0) : 0;
+  if (isPartial) {
+    if (abonoVal <= 0 || abonoVal >= pr.finalTotal) {
+      document.getElementById('abonoInput').focus();
+      return toast('El abono debe ser mayor a RD$0 y menor al total (' + fmt(pr.finalTotal) + ')');
+    }
+    if (!document.getElementById('clienteInput').value.trim()) {
+      document.getElementById('clienteInput').focus();
+      return toast('Escribe el nombre del cliente para llevar el saldo pendiente');
+    }
+  }
   const btn = document.getElementById('sellBtn');
   btn.disabled = true; btn.textContent = 'Guardando...';
   const metodo = document.getElementById('metodoSelect').value;
   const waRaw = isNoRev ? '' : document.getElementById('whatsappInput').value.trim();
   const waNum = formatWaPhone(waRaw);
 
-  // Distribute discount proportionally across items so Ventas & Resumen match exact finalTotal
+  // Distribute discount (and partial payment if abono) proportionally so Ventas & Caja match exact cash/transfer received today
+  const targetCharge = isPartial ? abonoVal : pr.finalTotal;
+  const totalReduction = Math.max(0, pr.subtotal - targetCharge);
   let itemsPayload;
   if (isNoRev) {
     itemsPayload = cart.map(c => ({ presentacion: c.presentacion, sabor: c.sabor, cantidad: c.cantidad, precioUnit: 0, total: 0 }));
-  } else if (pr.discount > 0 && pr.subtotal > 0) {
-    let remainingDisc = pr.discount;
+  } else if (totalReduction > 0 && pr.subtotal > 0) {
+    let remainingRed = totalReduction;
     itemsPayload = cart.map((c, idx) => {
       const lineSub = c.cantidad * c.precioUnit;
-      const share = idx === cart.length - 1 ? remainingDisc : Math.round(pr.discount * (lineSub / pr.subtotal));
-      remainingDisc -= share;
+      const share = idx === cart.length - 1 ? remainingRed : Math.round(totalReduction * (lineSub / pr.subtotal));
+      remainingRed -= share;
       const lineTot = Math.max(0, lineSub - share);
       return { presentacion: c.presentacion, sabor: c.sabor, cantidad: c.cantidad, precioUnit: Math.round(lineTot / c.cantidad), total: lineTot };
     });
   } else {
     itemsPayload = cart.map(c => ({ presentacion: c.presentacion, sabor: c.sabor, cantidad: c.cantidad, precioUnit: c.precioUnit, total: c.cantidad * c.precioUnit }));
   }
+  const pendVal = isPartial ? Math.max(0, pr.finalTotal - abonoVal) : 0;
+  const abonoNote = isPartial ? `Abono ${fmt(abonoVal)} de ${fmt(pr.finalTotal)} · Pendiente ${fmt(pendVal)}` : '';
   const isFuture = !isNoRev && document.getElementById('futureDeliveryCheck').checked;
   const showDel = !!convertingQuoteRow || isFuture;
   const dPlace = showDel ? document.getElementById('deliveryPlaceSelect').value : '';
@@ -1144,13 +1186,16 @@ async function submitSale() {
   const dSlot = showDel ? document.getElementById('deliverySlotSelect').value : '';
   const dDateFmt = dDateRaw ? dDateRaw.split('-').reverse().join('/') : '';
   const deliveryNote = (dPlace || dDateFmt || dSlot) ? ('Entrega: ' + [dPlace, dDateFmt, dSlot].filter(Boolean).join(' · ')) : '';
-  const notasStr = [pr.saleType === 'venta' ? pr.label : '', isFuture ? 'Entrega futura' : '', deliveryNote, comment].filter(Boolean).join(' · ');
+  const notasStr = [pr.saleType === 'venta' ? pr.label : '', abonoNote, isFuture ? 'Entrega futura' : '', deliveryNote, comment].filter(Boolean).join(' · ');
 
   try {
     const res = await apiPost({
       action: 'addSale',
       saleType: pr.saleType,
       noStock: isFuture,
+      orderTotal: isPartial ? pr.finalTotal : undefined,
+      abono: isPartial ? abonoVal : undefined,
+      pendiente: isPartial ? pendVal : undefined,
       canal: document.getElementById('canalSelect').value,
       items: itemsPayload,
       metodo: isNoRev ? pr.label : metodo,
@@ -1174,7 +1219,8 @@ async function submitSale() {
       document.getElementById('customDiscountInput').value = '';
       document.getElementById('saleCommentInput').value = '';
       document.getElementById('futureDeliveryCheck').checked = false;
-      document.getElementById('deliveryPlaceSelect').value = '';
+      document.getElementById('partialPayCheck').checked = false;
+      document.getElementById('abonoInput').value = '';
       document.getElementById('deliveryDateInput').value = '';
       document.getElementById('deliverySlotSelect').value = '';
       document.getElementById('deliveryBox').classList.add('hidden');
