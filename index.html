@@ -490,6 +490,11 @@
       </select>
     </div>
 
+    <label id="futureDeliveryWrap" style="display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:600;color:#1B4332;background:#F4FBF7;border:1px solid #B7E4C7;border-radius:10px;padding:8px 10px;margin-bottom:10px;cursor:pointer;">
+      <input id="futureDeliveryCheck" type="checkbox" style="width:17px;height:17px;margin:0;accent-color:#1B4332;" onchange="toggleFutureDeliveryUI()">
+      <span>📦 Entrega futura (cobra y suma a caja, sin descontar stock de hoy)</span>
+    </label>
+
     <div id="transferBox" class="hidden">
       <div class="seg">
         <button type="button" id="btnConf" class="active" onclick="setConf(false)">✓ Confirmada</button>
@@ -1000,8 +1005,14 @@ function clearCartConfirm() {
   renderCartBar();
 }
 
+function toggleFutureDeliveryUI() {
+  const isFut = document.getElementById('futureDeliveryCheck').checked;
+  document.getElementById('deliveryBox').classList.toggle('hidden', !convertingQuoteRow && !isFut);
+}
+
 function openCheckoutModal() {
   if (!cart.length) return toast('Agrega al menos un producto');
+  document.getElementById('futureDeliveryCheck').checked = false;
   document.getElementById('deliveryBox').classList.toggle('hidden', !convertingQuoteRow);
   renderCartItems();
   updateCheckoutUI();
@@ -1126,17 +1137,20 @@ async function submitSale() {
   } else {
     itemsPayload = cart.map(c => ({ presentacion: c.presentacion, sabor: c.sabor, cantidad: c.cantidad, precioUnit: c.precioUnit, total: c.cantidad * c.precioUnit }));
   }
-  const dPlace = convertingQuoteRow ? document.getElementById('deliveryPlaceSelect').value : '';
-  const dDateRaw = convertingQuoteRow ? document.getElementById('deliveryDateInput').value : '';
-  const dSlot = convertingQuoteRow ? document.getElementById('deliverySlotSelect').value : '';
+  const isFuture = !isNoRev && document.getElementById('futureDeliveryCheck').checked;
+  const showDel = !!convertingQuoteRow || isFuture;
+  const dPlace = showDel ? document.getElementById('deliveryPlaceSelect').value : '';
+  const dDateRaw = showDel ? document.getElementById('deliveryDateInput').value : '';
+  const dSlot = showDel ? document.getElementById('deliverySlotSelect').value : '';
   const dDateFmt = dDateRaw ? dDateRaw.split('-').reverse().join('/') : '';
   const deliveryNote = (dPlace || dDateFmt || dSlot) ? ('Entrega: ' + [dPlace, dDateFmt, dSlot].filter(Boolean).join(' · ')) : '';
-  const notasStr = [pr.saleType === 'venta' ? pr.label : '', deliveryNote, comment].filter(Boolean).join(' · ');
+  const notasStr = [pr.saleType === 'venta' ? pr.label : '', isFuture ? 'Entrega futura' : '', deliveryNote, comment].filter(Boolean).join(' · ');
 
   try {
     const res = await apiPost({
       action: 'addSale',
       saleType: pr.saleType,
+      noStock: isFuture,
       canal: document.getElementById('canalSelect').value,
       items: itemsPayload,
       metodo: isNoRev ? pr.label : metodo,
@@ -1159,6 +1173,7 @@ async function submitSale() {
       document.getElementById('saleAdjustSelect').value = 'venta';
       document.getElementById('customDiscountInput').value = '';
       document.getElementById('saleCommentInput').value = '';
+      document.getElementById('futureDeliveryCheck').checked = false;
       document.getElementById('deliveryPlaceSelect').value = '';
       document.getElementById('deliveryDateInput').value = '';
       document.getElementById('deliverySlotSelect').value = '';
