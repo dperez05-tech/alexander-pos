@@ -377,9 +377,10 @@
           <input id="rawNameInput" type="text" placeholder="Nombre (ej. Botellas 700 ml, Pistacho, Leche evap.)">
           <div class="row2">
             <select id="rawCatSelect">
-              <option value="Ingredientes">🥛 Ingredientes</option>
-              <option value="Envases">🍾 Envases / Tapas</option>
-              <option value="Empaque">🎁 Empaque / Etiquetas</option>
+              <option value="Alcoholes">🥃 Alcoholes</option>
+              <option value="Lácteos y Cremas">🥛 Lácteos y Cremas</option>
+              <option value="Botellas">🍾 Botellas / Envases</option>
+              <option value="Cajas">🎁 Cajas / Empaque</option>
               <option value="Otros">📦 Otros</option>
             </select>
             <select id="rawUnitSelect">
@@ -1760,11 +1761,7 @@ async function deleteRawAction(row, nombre) {
   else toast(res.error || 'Error');
 }
 function renderRawMaterials() {
-  const list = (state.rawMaterials || []).slice().sort((a, b) => {
-    const aAlert = a.stock <= 0 ? 0 : (a.stock <= a.minimo ? 1 : 2);
-    const bAlert = b.stock <= 0 ? 0 : (b.stock <= b.minimo ? 1 : 2);
-    return aAlert - bAlert || a.nombre.localeCompare(b.nombre);
-  });
+  const list = (state.rawMaterials || []).slice();
   const lowItems = list.filter(m => m.stock <= m.minimo);
   const badge = document.getElementById('rawAlarmBadge');
   badge.textContent = lowItems.length;
@@ -1779,30 +1776,73 @@ function renderRawMaterials() {
     banner.classList.add('hidden');
   }
 
-  document.getElementById('rawMaterialsList').innerHTML = list.map(m => {
-    const isOut = m.stock <= 0;
-    const isLow = !isOut && m.stock <= m.minimo;
-    const stCls = isOut ? 'st-bad' : isLow ? 'b-warn' : 'b-ok';
-    const stTxt = isOut ? '🔴 Agotado' : isLow ? '🟡 Reponer' : '🟢 OK';
-    const safeName = String(m.nombre || '').replace(/'/g, '');
-    const safeUnit = String(m.unidad || '').replace(/'/g, '');
-    return `
-    <div class="item">
-      <div style="flex:1;min-width:0;">
-        <div><strong>${m.nombre}</strong> <span class="badge ${stCls}" style="margin-left:4px;">${stTxt}</span></div>
-        <div style="font-size:12px;color:var(--muted);">${m.categoria} · Mín. alarma: <strong>${m.minimo} ${m.unidad}</strong>${m.notas ? ' · ' + m.notas : ''}</div>
-        <div style="margin-top:4px;display:flex;gap:10px;">
-          <button type="button" onclick="editRawMinPrompt(${m.row}, '${safeName}', ${m.minimo}, '${safeUnit}')" style="border:none;background:none;color:#175CD3;font-size:11px;font-weight:700;padding:0;cursor:pointer;">🔔 Cambiar alarma</button>
-          <button type="button" onclick="deleteRawAction(${m.row}, '${safeName}')" style="border:none;background:none;color:#B42318;font-size:11px;font-weight:700;padding:0;cursor:pointer;">🗑️ Quitar</button>
+  if (!list.length) {
+    document.getElementById('rawMaterialsList').innerHTML = '<small style="color:var(--muted)">Sin insumos registrados aún. Toca “+ Agregar insumo”.</small>';
+    return;
+  }
+
+  const CAT_META = {
+    'Alcoholes': { icon: '🥃', label: 'Alcoholes', order: 1 },
+    'Lácteos y Cremas': { icon: '🥛', label: 'Lácteos y Cremas', order: 2 },
+    'Ingredientes': { icon: '🥛', label: 'Ingredientes', order: 2.5 },
+    'Botellas': { icon: '🍾', label: 'Botellas y Envases', order: 3 },
+    'Envases': { icon: '🍾', label: 'Botellas y Envases', order: 3.5 },
+    'Cajas': { icon: '🎁', label: 'Cajas y Empaque', order: 4 },
+    'Empaque': { icon: '🎁', label: 'Cajas y Empaque', order: 4.5 },
+    'Otros': { icon: '📦', label: 'Otros', order: 99 }
+  };
+
+  const groups = {};
+  list.forEach(m => {
+    const cat = String(m.categoria || 'Otros').trim() || 'Otros';
+    if (!groups[cat]) groups[cat] = [];
+    groups[cat].push(m);
+  });
+
+  const orderedCats = Object.keys(groups).sort((a, b) => {
+    const oa = (CAT_META[a] && CAT_META[a].order) || 50;
+    const ob = (CAT_META[b] && CAT_META[b].order) || 50;
+    return oa - ob || a.localeCompare(b);
+  });
+
+  document.getElementById('rawMaterialsList').innerHTML = orderedCats.map((cat, gIdx) => {
+    const meta = CAT_META[cat] || { icon: '📦', label: cat };
+    const items = groups[cat].slice().sort((a, b) => {
+      const aAlert = a.stock <= 0 ? 0 : (a.stock <= a.minimo ? 1 : 2);
+      const bAlert = b.stock <= 0 ? 0 : (b.stock <= b.minimo ? 1 : 2);
+      return aAlert - bAlert || a.nombre.localeCompare(b.nombre);
+    });
+    const rowsHtml = items.map(m => {
+      const isOut = m.stock <= 0;
+      const isLow = !isOut && m.stock <= m.minimo;
+      const stCls = isOut ? 'st-bad' : isLow ? 'b-warn' : 'b-ok';
+      const stTxt = isOut ? '🔴 Agotado' : isLow ? '🟡 Reponer' : '🟢 OK';
+      const safeName = String(m.nombre || '').replace(/'/g, '');
+      const safeUnit = String(m.unidad || '').replace(/'/g, '');
+      return `
+      <div class="item">
+        <div style="flex:1;min-width:0;">
+          <div><strong>${m.nombre}</strong> <span class="badge ${stCls}" style="margin-left:4px;">${stTxt}</span></div>
+          <div style="font-size:12px;color:var(--muted);">Mín. alarma: <strong>${m.minimo} ${m.unidad}</strong>${m.notas ? ' · ' + m.notas : ''}</div>
+          <div style="margin-top:4px;display:flex;gap:10px;">
+            <button type="button" onclick="editRawMinPrompt(${m.row}, '${safeName}', ${m.minimo}, '${safeUnit}')" style="border:none;background:none;color:#175CD3;font-size:11px;font-weight:700;padding:0;cursor:pointer;">🔔 Cambiar alarma</button>
+            <button type="button" onclick="deleteRawAction(${m.row}, '${safeName}')" style="border:none;background:none;color:#B42318;font-size:11px;font-weight:700;padding:0;cursor:pointer;">🗑️ Quitar</button>
+          </div>
         </div>
+        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
+          <button class="btn-outline" style="width:34px;height:34px;padding:0;font-size:18px;font-weight:800;border-color:#B42318;color:#B42318;background:#FFF5F5;" onclick="adjustRawPrompt(${m.row}, '${safeName}', '${safeUnit}', -1, ${m.stock})">−</button>
+          <div style="min-width:44px;text-align:center;"><strong style="font-size:15px;">${m.stock}</strong><div style="font-size:10px;color:var(--muted);">${m.unidad}</div></div>
+          <button class="btn-outline" style="width:34px;height:34px;padding:0;font-size:18px;font-weight:800;" onclick="adjustRawPrompt(${m.row}, '${safeName}', '${safeUnit}', 1, ${m.stock})">+</button>
+        </div>
+      </div>`;
+    }).join('');
+    return `
+      <div style="margin-top:${gIdx === 0 ? '4px' : '14px'};margin-bottom:4px;padding:6px 10px;background:#F4F7F5;border-left:3px solid var(--green);border-radius:8px;display:flex;justify-content:space-between;align-items:center;">
+        <strong style="font-size:13px;color:var(--green);">${meta.icon} ${meta.label}</strong>
+        <span style="font-size:11px;font-weight:700;color:var(--muted);">${items.length}</span>
       </div>
-      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
-        <button class="btn-outline" style="width:34px;height:34px;padding:0;font-size:18px;font-weight:800;border-color:#B42318;color:#B42318;background:#FFF5F5;" onclick="adjustRawPrompt(${m.row}, '${safeName}', '${safeUnit}', -1, ${m.stock})">−</button>
-        <div style="min-width:44px;text-align:center;"><strong style="font-size:15px;">${m.stock}</strong><div style="font-size:10px;color:var(--muted);">${m.unidad}</div></div>
-        <button class="btn-outline" style="width:34px;height:34px;padding:0;font-size:18px;font-weight:800;" onclick="adjustRawPrompt(${m.row}, '${safeName}', '${safeUnit}', 1, ${m.stock})">+</button>
-      </div>
-    </div>`;
-  }).join('') || '<small style="color:var(--muted)">Sin insumos registrados aún. Toca “+ Agregar insumo”.</small>';
+      ${rowsHtml}`;
+  }).join('');
 }
 
 function renderAll() {
