@@ -344,17 +344,67 @@
 
   <!-- TAB 5: STOCK Y CIERRE -->
   <section id="tab-stock" class="hidden">
-    <div class="card">
-      <span class="label">Resumen General (Sheet)</span>
-      <div id="summaryList">Cargando...</div>
-      <div style="margin-top:12px;">
-        <a href="https://docs.google.com/spreadsheets/d/1P9kuKcbjICbH8MoijY5WyrEbgw7aWt_uWi9NJh8Hpnk/edit" target="_blank" class="btn-outline" style="display:inline-block;text-decoration:none;padding:9px 14px;">Abrir Google Sheet ↗</a>
+    <div class="seg" style="margin-bottom:12px;">
+      <button type="button" id="stockSubFinBtn" class="active" onclick="setStockSubTab('fin')">🍾 Producto Terminado</button>
+      <button type="button" id="stockSubRawBtn" onclick="setStockSubTab('raw')">🧪 Materia Prima <span id="rawAlarmBadge" class="hidden" style="background:#B42318;color:#fff;border-radius:99px;padding:1px 6px;font-size:11px;margin-left:4px;">0</span></button>
+    </div>
+
+    <div id="stockFinPanel">
+      <div class="card">
+        <span class="label">Resumen General (Sheet)</span>
+        <div id="summaryList">Cargando...</div>
+        <div style="margin-top:12px;">
+          <a href="https://docs.google.com/spreadsheets/d/1P9kuKcbjICbH8MoijY5WyrEbgw7aWt_uWi9NJh8Hpnk/edit" target="_blank" class="btn-outline" style="display:inline-block;text-decoration:none;padding:9px 14px;">Abrir Google Sheet ↗</a>
+        </div>
+      </div>
+
+      <div class="card">
+        <span class="label">Inventario actual</span>
+        <div id="inventoryList">Cargando...</div>
       </div>
     </div>
 
-    <div class="card">
-      <span class="label">Inventario actual</span>
-      <div id="inventoryList">Cargando...</div>
+    <div id="stockRawPanel" class="hidden">
+      <div id="rawAlertBanner" class="hidden" style="background:#FEF3C7;border:1px solid #F59E0B;border-radius:14px;padding:11px 13px;margin-bottom:12px;font-size:13px;color:#92400E;"></div>
+
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <span class="label" style="margin:0;">🧪 Inventario de Materia Prima</span>
+          <button type="button" class="btn-outline" style="padding:5px 10px;font-size:12px;" onclick="toggleRawForm()">+ Agregar insumo</button>
+        </div>
+
+        <div id="rawFormBox" class="hidden" style="background:#FFFDF8;border:1px solid var(--border);border-radius:12px;padding:10px;margin-bottom:12px;">
+          <input id="rawNameInput" type="text" placeholder="Nombre (ej. Botellas 700 ml, Pistacho, Leche evap.)">
+          <div class="row2">
+            <select id="rawCatSelect">
+              <option value="Ingredientes">🥛 Ingredientes</option>
+              <option value="Envases">🍾 Envases / Tapas</option>
+              <option value="Empaque">🎁 Empaque / Etiquetas</option>
+              <option value="Otros">📦 Otros</option>
+            </select>
+            <select id="rawUnitSelect">
+              <option value="u.">Unidades (u.)</option>
+              <option value="lb">Libras (lb)</option>
+              <option value="kg">Kilos (kg)</option>
+              <option value="L">Litros (L)</option>
+              <option value="ml">Mililitros (ml)</option>
+              <option value="paq.">Paquetes (paq.)</option>
+              <option value="latas">Latas</option>
+            </select>
+          </div>
+          <div class="row2">
+            <input id="rawStockInput" type="number" step="any" inputmode="decimal" placeholder="Stock actual (ej. 20)">
+            <input id="rawMinInput" type="number" step="any" inputmode="decimal" placeholder="Mínimo alarma (ej. 5)">
+          </div>
+          <input id="rawNotesInput" type="text" placeholder="Proveedor / nota (opcional)">
+          <div class="row2">
+            <button type="button" class="btn-outline" onclick="toggleRawForm(false)">Cancelar</button>
+            <button type="button" id="rawSaveBtn" class="btn-primary" onclick="submitRawMaterial()">Guardar insumo</button>
+          </div>
+        </div>
+
+        <div id="rawMaterialsList"><small style="color:var(--muted)">Sin insumos registrados aún. Toca “+ Agregar insumo”.</small></div>
+      </div>
     </div>
   </section>
 
@@ -827,11 +877,20 @@ function renderReports() {
     if (!p) return false;
     return p.noAlert ? i.stockActual <= 0 : i.stockActual <= LOW_STOCK_LIMIT;
   });
-  document.getElementById('repRestockList').innerHTML = restock.map(i => `
+  const rawLow = (state.rawMaterials || []).filter(m => m.stock <= m.minimo);
+  const restockHtml = [
+    ...restock.map(i => `
     <div class="item">
       <span style="font-size:13px;">${i.presentacion} · ${i.sabor}</span>
       <span class="badge ${i.stockActual<=0?'st-bad':'b-warn'}">${i.stockActual <= 0 ? 'Agotado' : i.stockActual + ' disp.'}</span>
-    </div>`).join('') || '<small style="color:var(--ok)">Todo con stock saludable</small>';
+    </div>`),
+    ...rawLow.map(m => `
+    <div class="item">
+      <span style="font-size:13px;">🧪 ${m.nombre} <small style="color:var(--muted)">(mín. ${m.minimo} ${m.unidad})</small></span>
+      <span class="badge ${m.stock<=0?'st-bad':'b-warn'}">${m.stock <= 0 ? 'Agotado' : m.stock + ' ' + m.unidad}</span>
+    </div>`)
+  ].join('');
+  document.getElementById('repRestockList').innerHTML = restockHtml || '<small style="color:var(--ok)">Todo con stock saludable</small>';
 
   const openQ = (state.quotes || []).filter(q => !String(q.estado || '').includes('Cerrada'));
   const pendTrf = groupSales(state.sales).filter(g => g.estado === 'Por confirmar');
@@ -1635,7 +1694,119 @@ async function closeCashDayAction() {
   btn.textContent = '🔒 Cerrar caja del día (retirar ventas y dejar RD$3,000)';
 }
 
+function setStockSubTab(mode) {
+  const isRaw = mode === 'raw';
+  document.getElementById('stockFinPanel').classList.toggle('hidden', isRaw);
+  document.getElementById('stockRawPanel').classList.toggle('hidden', !isRaw);
+  document.getElementById('stockSubFinBtn').classList.toggle('active', !isRaw);
+  document.getElementById('stockSubRawBtn').classList.toggle('active', isRaw);
+}
+function toggleRawForm(force) {
+  const box = document.getElementById('rawFormBox');
+  if (typeof force === 'boolean') box.classList.toggle('hidden', !force);
+  else box.classList.toggle('hidden');
+}
+async function submitRawMaterial() {
+  const nombre = document.getElementById('rawNameInput').value.trim();
+  if (!nombre) return toast('Escribe el nombre del insumo');
+  const stock = Number(document.getElementById('rawStockInput').value) || 0;
+  const minimo = Number(document.getElementById('rawMinInput').value) || 0;
+  const btn = document.getElementById('rawSaveBtn');
+  btn.disabled = true; btn.textContent = 'Guardando...';
+  try {
+    const res = await apiPost({
+      action: 'addRawMaterial',
+      nombre,
+      categoria: document.getElementById('rawCatSelect').value,
+      unidad: document.getElementById('rawUnitSelect').value,
+      stock,
+      minimo,
+      notas: document.getElementById('rawNotesInput').value.trim()
+    });
+    if (res.ok) {
+      document.getElementById('rawNameInput').value = '';
+      document.getElementById('rawStockInput').value = '';
+      document.getElementById('rawMinInput').value = '';
+      document.getElementById('rawNotesInput').value = '';
+      toggleRawForm(false);
+      toast('Insumo guardado');
+      await loadData();
+    } else toast(res.error || 'Error al guardar');
+  } catch (e) { toast('Error de red'); }
+  btn.disabled = false; btn.textContent = 'Guardar insumo';
+}
+async function adjustRawPrompt(row, nombre, unidad, sign, currentStock) {
+  const isSub = sign < 0;
+  const val = prompt(isSub ? `¿Cuánto restas a ${nombre} (${unidad})? (actual: ${currentStock})` : `¿Cuánto sumas a ${nombre} (${unidad})? (actual: ${currentStock})`, '1');
+  if (!val || isNaN(val)) return;
+  const qty = Math.abs(Number(val));
+  if (!qty) return;
+  const delta = isSub ? -Math.min(qty, Math.max(0, Number(currentStock) || 0)) : qty;
+  const res = await apiPost({ action: 'adjustRawMaterial', row, delta });
+  if (res.ok) { toast(isSub ? `Restado (-${Math.abs(delta)} ${unidad})` : `Sumado (+${delta} ${unidad})`); await loadData(); }
+  else toast(res.error || 'Error al ajustar');
+}
+async function editRawMinPrompt(row, nombre, currentMin, unidad) {
+  const val = prompt(`Nuevo mínimo de alarma para ${nombre} (${unidad}):`, String(currentMin));
+  if (val === null || val === '' || isNaN(val)) return;
+  const res = await apiPost({ action: 'updateRawMaterial', row, minimo: Math.max(0, Number(val)) });
+  if (res.ok) { toast('Alarma actualizada'); await loadData(); }
+  else toast(res.error || 'Error');
+}
+async function deleteRawAction(row, nombre) {
+  if (!confirm(`¿Eliminar el insumo "${nombre}" de Materia Prima?`)) return;
+  const res = await apiPost({ action: 'deleteRawMaterial', row });
+  if (res.ok) { toast('Insumo eliminado'); await loadData(); }
+  else toast(res.error || 'Error');
+}
+function renderRawMaterials() {
+  const list = (state.rawMaterials || []).slice().sort((a, b) => {
+    const aAlert = a.stock <= 0 ? 0 : (a.stock <= a.minimo ? 1 : 2);
+    const bAlert = b.stock <= 0 ? 0 : (b.stock <= b.minimo ? 1 : 2);
+    return aAlert - bAlert || a.nombre.localeCompare(b.nombre);
+  });
+  const lowItems = list.filter(m => m.stock <= m.minimo);
+  const badge = document.getElementById('rawAlarmBadge');
+  badge.textContent = lowItems.length;
+  badge.classList.toggle('hidden', lowItems.length === 0);
+
+  const banner = document.getElementById('rawAlertBanner');
+  if (lowItems.length > 0) {
+    banner.innerHTML = `<strong>⚠️ Alarma de Materia Prima (${lowItems.length} por reponer):</strong><div style="margin-top:4px;">` +
+      lowItems.map(m => `• <strong>${m.nombre}</strong>: ${m.stock} ${m.unidad} (mín. ${m.minimo})`).join('<br>') + `</div>`;
+    banner.classList.remove('hidden');
+  } else {
+    banner.classList.add('hidden');
+  }
+
+  document.getElementById('rawMaterialsList').innerHTML = list.map(m => {
+    const isOut = m.stock <= 0;
+    const isLow = !isOut && m.stock <= m.minimo;
+    const stCls = isOut ? 'st-bad' : isLow ? 'b-warn' : 'b-ok';
+    const stTxt = isOut ? '🔴 Agotado' : isLow ? '🟡 Reponer' : '🟢 OK';
+    const safeName = String(m.nombre || '').replace(/'/g, '');
+    const safeUnit = String(m.unidad || '').replace(/'/g, '');
+    return `
+    <div class="item">
+      <div style="flex:1;min-width:0;">
+        <div><strong>${m.nombre}</strong> <span class="badge ${stCls}" style="margin-left:4px;">${stTxt}</span></div>
+        <div style="font-size:12px;color:var(--muted);">${m.categoria} · Mín. alarma: <strong>${m.minimo} ${m.unidad}</strong>${m.notas ? ' · ' + m.notas : ''}</div>
+        <div style="margin-top:4px;display:flex;gap:10px;">
+          <button type="button" onclick="editRawMinPrompt(${m.row}, '${safeName}', ${m.minimo}, '${safeUnit}')" style="border:none;background:none;color:#175CD3;font-size:11px;font-weight:700;padding:0;cursor:pointer;">🔔 Cambiar alarma</button>
+          <button type="button" onclick="deleteRawAction(${m.row}, '${safeName}')" style="border:none;background:none;color:#B42318;font-size:11px;font-weight:700;padding:0;cursor:pointer;">🗑️ Quitar</button>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
+        <button class="btn-outline" style="width:34px;height:34px;padding:0;font-size:18px;font-weight:800;border-color:#B42318;color:#B42318;background:#FFF5F5;" onclick="adjustRawPrompt(${m.row}, '${safeName}', '${safeUnit}', -1, ${m.stock})">−</button>
+        <div style="min-width:44px;text-align:center;"><strong style="font-size:15px;">${m.stock}</strong><div style="font-size:10px;color:var(--muted);">${m.unidad}</div></div>
+        <button class="btn-outline" style="width:34px;height:34px;padding:0;font-size:18px;font-weight:800;" onclick="adjustRawPrompt(${m.row}, '${safeName}', '${safeUnit}', 1, ${m.stock})">+</button>
+      </div>
+    </div>`;
+  }).join('') || '<small style="color:var(--muted)">Sin insumos registrados aún. Toca “+ Agregar insumo”.</small>';
+}
+
 function renderAll() {
+  renderRawMaterials();
   renderProductGrid();
   renderCartBar();
   if (!document.getElementById('tab-reportes').classList.contains('hidden')) renderReports();
