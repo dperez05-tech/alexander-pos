@@ -61,6 +61,8 @@
     .prod-card:active { transform: scale(.97); border-color: var(--green); }
     .prod-img-wrap { position: relative; background: #F6E9D7; height: 158px; display: flex; align-items: center; justify-content: center; }
     .prod-img-wrap img { width: 100%; height: 100%; object-fit: cover; }
+    .prod-img-wrap.is-contain { background: #FFFFFF; padding: 8px; }
+    .prod-img-wrap.is-contain img { object-fit: contain; }
     .prod-stock {
       position: absolute; top: 8px; right: 8px;
       padding: 4px 8px; border-radius: 99px; font-size: 11px; font-weight: 800;
@@ -252,6 +254,14 @@
           <option value="ALEX-CAJ3-MIX">Cajita 3 sabores · Pistacho, Avellana, Tradicional (RD$700)</option>
           <option value="ALEX-CAJ2-TA">Cajita 2 sabores · Tradicional y Avellana (RD$600)</option>
           <option value="ALEX-CAJ2-PA">Cajita 2 sabores · Pistacho y Avellana (RD$600)</option>
+          <option value="DULCE-CASITA">La Casita · 6 polvorones y 2 brownies (RD$450)</option>
+          <option value="DULCE-FROZEN-BRW">Frozen Christmas · 4 brownies (RD$350)</option>
+          <option value="DULCE-FROZEN-POL">Frozen Christmas · 8 polvorones (RD$350)</option>
+          <option value="DULCE-CLASSIC-BRW">Classic Christmas · 4 brownies (RD$350)</option>
+          <option value="DULCE-CLASSIC-POL">Classic Christmas · 8 polvorones (RD$350)</option>
+          <option value="DULCE-GREEN-BRW">Green Christmas · 4 brownies (RD$350)</option>
+          <option value="DULCE-GREEN-POL">Green Christmas · 8 polvorones (RD$350)</option>
+          <option value="DULCE-WHITE-POL">White Christmas · 8 polvorones (RD$350)</option>
         </select>
         <input id="qQty" type="number" inputmode="numeric" value="1" min="1" placeholder="Cant.">
       </div>
@@ -671,7 +681,15 @@ const CATALOG = [
   { sku: 'ALEX-700-PIST', presentacion: '700 ml',           sabor: 'Pistacho',    precio: 1600, img: './assets/700-pist.jpg' },
   { sku: 'ALEX-CAJ3-MIX', presentacion: 'Cajita 3 sabores', sabor: 'Pistacho, Avellana, Tradicional', precio: 700, img: './assets/caj-3-sabores.jpg', sub: 'Pistacho, Avellana y Tradicional', noAlert: true },
   { sku: 'ALEX-CAJ2-TA',  presentacion: 'Cajita 2 sabores', sabor: 'Tradicional y Avellana',          precio: 600, img: './assets/caj-2-trad-avel.jpg', sub: 'Tradicional y Avellana', noAlert: true },
-  { sku: 'ALEX-CAJ2-PA',  presentacion: 'Cajita 2 sabores', sabor: 'Pistacho y Avellana',             precio: 600, img: './assets/caj-2-pist-avel.jpg', sub: 'Pistacho y Avellana', noAlert: true }
+  { sku: 'ALEX-CAJ2-PA',  presentacion: 'Cajita 2 sabores', sabor: 'Pistacho y Avellana',             precio: 600, img: './assets/caj-2-pist-avel.jpg', sub: 'Pistacho y Avellana', noAlert: true },
+  { sku: 'DULCE-CASITA',      presentacion: 'La Casita',        sabor: '6 polvorones y 2 brownies', precio: 450, img: './assets/casita.jpg',        sub: '6 polvorones y 2 brownies', noAlert: true, contain: true },
+  { sku: 'DULCE-FROZEN-BRW',  presentacion: 'Frozen Christmas', sabor: '4 brownies',                precio: 350, img: './assets/candy-frozen.jpg',  sub: '4 brownies',                noAlert: true, contain: true },
+  { sku: 'DULCE-FROZEN-POL',  presentacion: 'Frozen Christmas', sabor: '8 polvorones',              precio: 350, img: './assets/candy-frozen.jpg',  sub: '8 polvorones',              noAlert: true, contain: true },
+  { sku: 'DULCE-CLASSIC-BRW', presentacion: 'Classic Christmas',sabor: '4 brownies',                precio: 350, img: './assets/candy-classic.jpg', sub: '4 brownies',                noAlert: true, contain: true },
+  { sku: 'DULCE-CLASSIC-POL', presentacion: 'Classic Christmas',sabor: '8 polvorones',              precio: 350, img: './assets/candy-classic.jpg', sub: '8 polvorones',              noAlert: true, contain: true },
+  { sku: 'DULCE-GREEN-BRW',   presentacion: 'Green Christmas',  sabor: '4 brownies',                precio: 350, img: './assets/candy-green.jpg',   sub: '4 brownies',                noAlert: true, contain: true },
+  { sku: 'DULCE-GREEN-POL',   presentacion: 'Green Christmas',  sabor: '8 polvorones',              precio: 350, img: './assets/candy-green.jpg',   sub: '8 polvorones',              noAlert: true, contain: true },
+  { sku: 'DULCE-WHITE-POL',   presentacion: 'White Christmas',  sabor: '8 polvorones',              precio: 350, img: './assets/candy-white.jpg',   sub: '8 polvorones',              noAlert: true, contain: true }
 ];
 
 localStorage.removeItem('alex_pin');
@@ -943,7 +961,7 @@ function renderProductGrid() {
     const inCart = cart.filter(c => c.sku === p.sku).reduce((a, c) => a + c.cantidad, 0);
     return `
       <button type="button" class="prod-card ${emptyCls}" onclick="openSaleModal('${p.sku}')">
-        <div class="prod-img-wrap">
+        <div class="prod-img-wrap${p.contain ? ' is-contain' : ''}">
           <img src="${p.img}" alt="${p.presentacion} ${p.sabor}">
           ${inCart > 0 ? `<span class="prod-cart-badge">🛒 ${inCart}</span>` : ''}
           <span class="prod-stock ${m.cls}">${m.badge}</span>
