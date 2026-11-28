@@ -827,6 +827,7 @@ function computeReportData() {
   });
   let fondo = 0, vEfeCaja = 0, gastos = 0, depositos = 0, retiros = 0;
   dayCash.forEach(c => {
+    if (isInternalCloseMove(c)) return;
     const m = Number(c.monto) || 0;
     if (c.tipo === 'Fondo Inicial') fondo += m;
     else if (c.tipo === 'Venta Efectivo') vEfeCaja += m;
@@ -879,7 +880,7 @@ function renderReports() {
     </div>`).join('') || '<small style="color:var(--muted)">Sin ventas en este período</small>';
 
   const cajaActual = Number(state.summary['Efectivo Actual en Caja Chica']) || 0;
-  const gastosList = r.dayCash.filter(c => c.tipo !== 'Venta Efectivo').map(c => `
+  const gastosList = r.dayCash.filter(c => c.tipo !== 'Venta Efectivo' && !isInternalCloseMove(c)).map(c => `
     <div class="item">
       <div style="font-size:12px;"><strong>${c.tipo}</strong> · ${c.concepto} ${c.comprobante ? '· <a href="'+c.comprobante+'" target="_blank">📎 Factura</a>' : ''}</div>
       <strong style="font-size:13px;">${fmt(c.monto)}</strong>
@@ -1688,6 +1689,9 @@ async function undoSale(id) {
   } catch (e) { toast('Error de red al deshacer'); }
 }
 
+function isInternalCloseMove(m) {
+  return m && m.tipo === 'Retiro' && /cierre\s*(autom[aá]tico|caja)/i.test(String(m.concepto || ''));
+}
 let showAllCash = false;
 function toggleCashHistory() {
   showAllCash = !showAllCash;
@@ -1928,12 +1932,13 @@ function renderAll() {
   const cajaActualVal = Number(state.summary['Efectivo Actual en Caja Chica']) || 0;
   document.getElementById('cajaTotal').textContent = fmt(cajaActualVal);
   const todayStr = localYmd();
-  const todayMoves = (state.cashMoves || []).filter(m => String(m.fecha || '').slice(0, 10) === todayStr);
+  const visibleCashMoves = (state.cashMoves || []).filter(m => !isInternalCloseMove(m));
+  const todayMoves = visibleCashMoves.filter(m => String(m.fecha || '').slice(0, 10) === todayStr);
   const todayCashSales = todayMoves.filter(m => m.tipo === 'Venta Efectivo').reduce((a, m) => a + (Number(m.monto) || 0), 0);
   const todayAdelantos = todayMoves.filter(m => m.tipo === 'Adelanto / Pedido futuro').reduce((a, m) => a + (Number(m.monto) || 0), 0);
   const todayCashOut = todayMoves.filter(m => m.tipo !== 'Venta Efectivo' && m.tipo !== 'Fondo Inicial' && m.tipo !== 'Adelanto / Pedido futuro').reduce((a, m) => a + (Number(m.monto) || 0), 0);
   document.getElementById('cajaDayBreakdown').innerHTML = `Fondo inicial: <strong>RD$3,000</strong> · Ventas efectivo hoy: <strong>${fmt(todayCashSales)}</strong>${todayAdelantos ? ` · Adelantos hoy: <strong>+${fmt(todayAdelantos)}</strong>` : ''}${todayCashOut ? ` · Salidas hoy: <strong>−${fmt(todayCashOut)}</strong>` : ''}`;
-  const movesToShow = showAllCash ? (state.cashMoves || []).slice(0, 25) : todayMoves;
+  const movesToShow = showAllCash ? visibleCashMoves.slice(0, 25) : todayMoves;
   document.getElementById('cashMovesList').innerHTML = movesToShow.map(m => `
     <div class="item">
       <div>
